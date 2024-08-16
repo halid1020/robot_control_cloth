@@ -482,8 +482,8 @@ if __name__ == '__main__':
 
     #qspnp.run()
     #qspnp.test_world_pick_and_place()
-    #qspnp.test_camera(crop=True)
-    qspnp.test_pixel_pick_and_place([1, 1, -1, -1])
+    qspnp.test_camera(crop=True)
+    #qspnp.test_pixel_pick_and_place([1, 1, -1, -1])
     # qspnp.test_pixel_pick_and_place()
     
 

@@ -137,13 +137,6 @@ def launch_setup(context, *args, **kwargs):
                             "/urdf/ur.urdf.xacro", mappings={"name": "ur", "ur_type": ur_type})
         .robot_description_semantic(file_path=get_package_share_directory("ur_moveit_config") + \
                                     "/srdf/ur.srdf.xacro", mappings={"name": "ur"})
-        .robot_description_kinematics(file_path=get_package_share_directory("ur_moveit_config") + "/config/kinematics.yaml")
-        # .planning_pipelines(
-        #     default_planning_pipeline="pilz_industrial_motion_planner",
-        #     pipelines=["pilz_industrial_motion_planner"])
-        # .trajectory_execution(
-        #     file_path=get_package_share_directory("ur_moveit_config") + "/config/controllers.yaml",
-        #     moveit_manage_controllers=False) 
         .planning_scene_monitor()
         .pilz_cartesian_limits(file_path=get_package_share_directory("robot_control_cloth") + \
                                "/config/pilz_cartesian_limits.yaml")
@@ -153,7 +146,6 @@ def launch_setup(context, *args, **kwargs):
         )
         .to_moveit_configs()
     )
-    #print('here!!!')
     
 
     # Planning Configuration
@@ -215,13 +207,6 @@ def launch_setup(context, *args, **kwargs):
             }
     }
 
-    # static_tf = Node(
-    #     package="tf2_ros",
-    #     executable="static_transform_publisher",
-    #     name="static_transform_publisher",
-    #     output="log",
-    #     arguments=["--frame-id", "world", "--child-frame-id", "base_link"],
-    # )
 
     # Start the actual move_group node/action server
     move_group_node = Node(
@@ -263,28 +248,14 @@ def launch_setup(context, *args, **kwargs):
     )
 
 
-    robot_state_publisher = Node(
-        package="robot_state_publisher",
-        executable="robot_state_publisher",
-        name="robot_state_publisher",
-        output="log",
-        parameters=[robot_description],
-    )
-
     moveit_dict = moveit_config.to_dict()
     
-    # moveit_dict.update(robot_description)
-    # moveit_dict.update(robot_description_semantic)
-    # moveit_dict.update(robot_description_planning)
+ 
 
     moveit_dict.update(moveit_controllers)
     moveit_dict.update(custom_kinematics)   
     moveit_dict.update(trajectory_execution)
-    # moveit_dict.update(ompl_planning_pipeline_config)
-
-    # print('keys', moveit_config.to_dict().keys())
-    # print('kinematics', robot_description_kinematics)
-    #moveit_dict.update(planning_scene_monitor_parameters)
+   
     moveit_py_node = Node(
         package="robot_control_cloth",  # Replace with the actual package containing moveit_test.py
         executable=executable,
@@ -295,9 +266,7 @@ def launch_setup(context, *args, **kwargs):
         ],
     )
 
-    #nodes_to_start = [move_group_node, rviz_node, moveit_test_node]
-
-    nodes_to_start = [move_group_node, rviz_node, robot_state_publisher, moveit_py_node]
+    nodes_to_start = [move_group_node, rviz_node, moveit_py_node]
 
     return nodes_to_start
 
@@ -420,8 +389,5 @@ def generate_launch_description():
             description="planner to run"
         )
     )
-    # declared_arguments.append(
-    #     DeclareLaunchArgument("launch_servo", default_value="true", description="Launch Servo?")
-    # )
 
     return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])

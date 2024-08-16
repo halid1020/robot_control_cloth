@@ -1,11 +1,16 @@
-# Source: https://github.com/ros-planning/moveit_resources/blob/3d6a737f95fb7e5f3cfdc306d12b0bb6cbdadfb2/panda_moveit_config/config/pilz_industrial_motion_planner_planning.yaml
 planning_plugin: pilz_industrial_motion_planner/CommandPlanner
 request_adapters: >-
-  default_planner_request_adapters/FixWorkspaceBounds
-  default_planner_request_adapters/FixStartStateBounds
-  default_planner_request_adapters/FixStartStateCollision
-  default_planner_request_adapters/FixStartStatePathConstraints
-default_planner_config: PTP
+    default_planner_request_adapters/AddTimeOptimalParameterization 
+    default_planner_request_adapters/FixWorkspaceBounds 
+    default_planner_request_adapters/FixStartStateBounds 
+    default_planner_request_adapters/FixStartStateCollision 
+    default_planner_request_adapters/FixStartStatePathConstraints 
+response_adapters:
+  - default_planning_response_adapters/ValidateSolution
+  - default_planning_response_adapters/DisplayMotionPath
 capabilities: >-
     pilz_industrial_motion_planner/MoveGroupSequenceAction
     pilz_industrial_motion_planner/MoveGroupSequenceService
+ur_manipulator:
+  planner_configs::
+    - PTP

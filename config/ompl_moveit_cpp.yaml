@@ -1,0 +1,24 @@
+planning_scene_monitor_options:
+  name: "planning_scene_monitor"
+  robot_description: "robot_description"
+  joint_state_topic: "/joint_states"
+  attached_collision_object_topic: "/planning_scene_monitor"
+  publish_planning_scene_topic: "/publish_planning_scene"
+  monitored_planning_scene_topic: "/monitored_planning_scene"
+  wait_for_initial_state_timeout: 10.0
+
+planning_pipelines:
+  # !! NOTE: pipeline_names seem to be causing conflicts with package moveit_configs_utils default
+  #          config files in the default_config folder, see NOTE in next section below for solution
+  pipeline_names: ["ompl"]
+
+
+
+# Default
+plan_request_params:  # PlanRequestParameters similar to the ones that are used by the single pipeline planning of moveit_cpp
+  planning_attempts: 1  # Number of attempts the planning pipeline tries to solve a given motion planning problem
+  planning_pipeline: ompl  # Name of the pipeline that is being used
+  planner_id: RRTConnect  # Name of the specific planner to be used by the pipeline
+  max_velocity_scaling_factor: 0.3 # Velocity scaling parameter for the trajectory generation algorithm that is called (if configured) after the path planning
+  max_acceleration_scaling_factor:  0.3  # Acceleration scaling parameter for the trajectory generation algorithm that is called (if configured) after the path planning
+  planning_time: 2.0 

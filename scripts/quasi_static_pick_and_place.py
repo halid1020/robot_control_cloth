@@ -102,6 +102,29 @@ class QuasiStaticPickAndPlace(Node):
         
         
         estimated_depth = self.camera_height
+
+        if pick_depth_estimate:
+            depth_images = [self.take_cropped_rgbd()[1] for _ in range(5)]
+             # Define a small region around the pick pixel
+            region_size = 5  # 5x5 pixel region
+            x, y = pick_pixel
+            
+            depth_values = []
+            
+            for depth_image in depth_images:
+                region = depth_image[y-region_size//2:y+region_size//2+1, 
+                                    x-region_size//2:x+region_size//2+1]
+                
+                # Filter out zero values (which often indicate invalid measurements)
+                valid_depths = region[region > 0]
+                
+                if len(valid_depths) > 0:
+                    depth_values.append(np.median(valid_depths))
+            
+            estimated_depth = min(np.median(depth_values), self.camera_height)
+
+            self.logger.info(f"Estiamted pick depth {estimated_depth}")
+             
         
         self.logger.info(\
             f"pixel2base pixel {pick_pixel} depth {estimated_depth} intrinsic {self.camera_intrinstic} camera pose {self.camera_pos}")
@@ -123,36 +146,6 @@ class QuasiStaticPickAndPlace(Node):
         self.execute_pick_and_place(base_pick, base_place)
     
     
-        
-
-
-    ######## MOCK PnP  #######
-    def mock_publish_pnp(self, pnp):
-        pnp_msg = NormPixelPnP()
-        pnp_msg.header = Header()
-        pnp_msg.header.stamp = rospy.Time.now()
-        pnp_msg.data = pnp
-        self.mock_pnp_pub.publish(pnp_msg)
-        self.rate.sleep()
-
-    def mock_pnp_callback(self, pnp):
-        pnp = np.asarray(pnp.data)
-        #print("Mock Received pnp: %s", pnp)
-
-
-        ### Post Process, Convert form pixel space to base space
-        pixel_pnp = self.norm2pixel_pnp(pnp)
-
-        self.go_home()
-        self.publish_observation()
-
-
-        ### Publish PnP
-        self.mock_publish_pnp(np.random.rand(4))
-        
-    ######## End #######
-    
-    
     def _initialize_gripper(self):
         self.gripper = ActiveGripperControl()
         self.g2e_offset = self.config.g2e_offset
@@ -167,10 +160,7 @@ class QuasiStaticPickAndPlace(Node):
         )
         self.home_joint_states = self.config.home_joint_states.toDict()
         self.fix_orien = normalise_quaterion(self.config.eff_ready_orien)
-        # self.eff_default_orien = self.config.eff_default_orien
-        # self.eff_home_pose = self.config.eff_home_pose
-        # self.eff_home_z = self.eff_home_pose[-1]
-        # self.eff_home_orien = self.eff_default_orien
+
 
         self._initialize_gripper()
 
@@ -195,9 +185,7 @@ class QuasiStaticPickAndPlace(Node):
         self.logger.info('Going Home')
         self.gripper.open()
         self.robot_arm.go(joint_states=self.home_joint_states)
-        #self.robot_arm.go(pose=self.ready_pos)
-        # self.gripper.grasp()
-        # self.gripper.open()
+
 
         self.logger.info('Home position reached !!!')
     

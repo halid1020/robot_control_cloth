@@ -1,34 +1,3 @@
-# Copyright (c) 2021 PickNik, Inc.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-#    * Redistributions of source code must retain the above copyright
-#      notice, this list of conditions and the following disclaimer.
-#
-#    * Redistributions in binary form must reproduce the above copyright
-#      notice, this list of conditions and the following disclaimer in the
-#      documentation and/or other materials provided with the distribution.
-#
-#    * Neither the name of the {copyright_holder} nor the names of its
-#      contributors may be used to endorse or promote products derived from
-#      this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.
-
-#
-# Author: Denis Stogl
-
 import os
 
 from launch_ros.actions import Node
@@ -62,6 +31,8 @@ def launch_setup(context, *args, **kwargs):
     use_sim_time = LaunchConfiguration("use_sim_time")
     launch_rviz = LaunchConfiguration("launch_rviz")
     executable = LaunchConfiguration("executable")
+    planner = LaunchConfiguration("planner").perform(context)
+    print('planner', planner)
     #launch_servo = LaunchConfiguration("launch_servo")
 
     joint_limit_params = PathJoinSubstitution(
@@ -167,21 +138,22 @@ def launch_setup(context, *args, **kwargs):
         .robot_description_semantic(file_path=get_package_share_directory("ur_moveit_config") + \
                                     "/srdf/ur.srdf.xacro", mappings={"name": "ur"})
         .robot_description_kinematics(file_path=get_package_share_directory("ur_moveit_config") + "/config/kinematics.yaml")
-        .planning_pipelines(
-            default_planning_pipeline="ompl",
-            pipelines=["ompl"])
+        # .planning_pipelines(
+        #     default_planning_pipeline="pilz_industrial_motion_planner",
+        #     pipelines=["pilz_industrial_motion_planner"])
         # .trajectory_execution(
         #     file_path=get_package_share_directory("ur_moveit_config") + "/config/controllers.yaml",
         #     moveit_manage_controllers=False) 
         .planning_scene_monitor()
-        #.pilz_cartesian_limits(file_path=get_package_share_directory("ur_moveit_config") + "/config/pilz_cartesian_limits.yaml")
+        .pilz_cartesian_limits(file_path=get_package_share_directory("robot_control_cloth") + \
+                               "/config/pilz_cartesian_limits.yaml")
         .moveit_cpp(
             file_path=get_package_share_directory("robot_control_cloth")
-            + "/config/moveit_cpp.yaml"
+            + f"/config/{planner}_moveit_cpp.yaml"
         )
         .to_moveit_configs()
     )
-    print('here!!!')
+    #print('here!!!')
     
 
     # Planning Configuration
@@ -310,8 +282,8 @@ def launch_setup(context, *args, **kwargs):
     moveit_dict.update(trajectory_execution)
     # moveit_dict.update(ompl_planning_pipeline_config)
 
-    print('keys', moveit_config.to_dict().keys())
-    print('kinematics', robot_description_kinematics)
+    # print('keys', moveit_config.to_dict().keys())
+    # print('kinematics', robot_description_kinematics)
     #moveit_dict.update(planning_scene_monitor_parameters)
     moveit_py_node = Node(
         package="robot_control_cloth",  # Replace with the actual package containing moveit_test.py
@@ -438,6 +410,14 @@ def generate_launch_description():
             'executable',
             default_value='ur3e_robot_moveit.py',
             description='Name of the executable to run'
+        )
+    )
+
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "planner",
+            default_value='ompl',
+            description="planner to run"
         )
     )
     # declared_arguments.append(

@@ -39,6 +39,7 @@ install(PROGRAMS
   scripts/camera_image_retriever.py
   scripts/test_whole_system.py
   scripts/human_interface.py
+  scripts/hand_eye_calibrator.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

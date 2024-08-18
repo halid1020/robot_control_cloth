@@ -99,7 +99,8 @@ class HumanPickAndPlace(Node):
                 cv2.imshow('Click Pick and Place Points', img)
 
         cv2.imshow('Click Pick and Place Points', img)
-        cv2.setMouseCallback('Click Pick and Place Points', mouse_callback)
+        cv2.setMouseCallback('Click Pick and Place Points', 
+                             mouse_callback)
 
         while len(clicks) < 2:
             cv2.waitKey(1)

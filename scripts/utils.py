@@ -11,6 +11,13 @@ import cv2
 
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
+def quaternion_to_euler(q):
+            r = R.from_quat(q)
+            return r.as_euler('xyz', degrees=True)
+
+def euler_to_quaternion(euler):
+    r = R.from_euler('xyz', euler, degrees=True)
+    return r.as_quat()
 
 def save_color(img, filename='color', directory="."):
     cv2.imwrite('{}/{}.png'.format(directory, filename), img)

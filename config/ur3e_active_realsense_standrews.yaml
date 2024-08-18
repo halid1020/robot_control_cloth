@@ -30,7 +30,8 @@ effector_link: "tool0"
 eff_ready_pose:  [-0.16, -0.13, 0.5]   # x, y, z for end-effector
 eff_ready_orien: [0.70, 0.70, 0.0, 0.0]
 fix_orien: [0.70, 0.70, 0.0, 0.0]
-
+work_R: 0.52
+work_r: 0.24
 ##########################
 ## Robot Gripper Config ##
 ##########################
@@ -44,7 +45,7 @@ g2e_offset: 0.1825
 ###################
 
 camera_pose: [-0.385, 0.028, 0.738000]
-camera_orien: [180.0, 0.000000, 89.500000] #[-0.711887, 0.060529, 0.697168, 0.059253]
+camera_orien: [180.0, 0.000000, 89.500000] # Euler system in degree.
 # CAUTION!!! following values need to be calibrations using hand-eye-calibration
 # camera_setup: "eye-on-hand"
 # eff2camera_pos:

@@ -6,13 +6,13 @@ import cv2
 import rclpy
 from rclpy.node import Node
 import tkinter as tk
-from tkinter import simpledialog
 from tkinter import ttk
 from scipy.spatial.transform import Rotation as R
 
 
 ros_version = os.environ.get('ROS_VERSION')
 print('ROS version', ros_version)
+import traceback
 
 
 from utils import  *
@@ -43,6 +43,41 @@ class HandEyeCalibrator(Node):
 
         self.logger.info('Finished Initialisation, and ready for experimetns')
 
+    def get_workspace_mask(self):
+        rgb, depth = self.camera.take_rgbd()
+        height, width = rgb.shape[:2]
+
+        # Get all pixel coordinates
+        y, x = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
+        pixels = np.stack((x.flatten(), y.flatten()), axis=-1)
+
+        self.logger.info(f'pixels shape {pixels.shape}')
+
+        # Convert pixels to base coordinates
+        base_particles = pixel2base(pixels, self.camera_intrinstic, 
+                                    self.camera_pos, [self.camera_height]*pixels.shape[0])
+        
+        self.logger.info(f'base particles shape {base_particles.shape}')
+
+        # Check if base_particles are within the workspace region
+        distances = np.sqrt(base_particles[:, 0]**2 + base_particles[:, 1]**2)
+        self.logger.info(f'mask distance shape {distances.shape}')
+        within_workspace = (distances >= self.work_r) & (distances <= self.work_R)
+
+        # Create workspace mask
+        workspace_mask = within_workspace.reshape(height, width)
+
+        save_mask(workspace_mask, filename='workspace_mask')
+
+        alpha = 0.9
+        workspace_mask_ = np.repeat(workspace_mask[:,:,np.newaxis], 3, axis=2)
+        masked_rgb = alpha*rgb*workspace_mask_ + (1-alpha)*rgb*(1-workspace_mask_)
+        save_color(masked_rgb, filename='workmasked_rgb')
+
+        return workspace_mask
+
+
+
 
     def update_calibration(self):
         
@@ -56,9 +91,12 @@ class HandEyeCalibrator(Node):
                 self.camera_pos = MyPos(pose=np.array(new_pose), orien=np.array(new_orien))
                 self.camera_height = self.camera_pos.pose[2]
                 self.logger.info("Camera extrinsics updated successfully.")
+                self.get_workspace_mask()
                 root.destroy()
-            except ValueError:
-                self.logger.error("Invalid input! Please enter numeric values.")
+            except Exception as e:
+                self.logger.error(f"An unexpected error occurred: {str(e)}")
+                self.logger.error("Stack trace:")
+                self.logger.error(traceback.format_exc())
 
         root = tk.Tk()
         root.title("Update Camera Extrinsics")
@@ -105,8 +143,8 @@ class HandEyeCalibrator(Node):
         
         self.logger.info(\
             f"pixel2base pixel {pick_pixel} depth {estimated_depth} intrinsic {self.camera_intrinstic} camera pose {self.camera_pos}")
-        base_pick = pixel2base(pick_pixel, self.camera_intrinstic, 
-                               self.camera_pos, estimated_depth)
+        base_pick = pixel2base([pick_pixel], self.camera_intrinstic, 
+                               self.camera_pos, estimated_depth)[0]
         base_pick = MyPos(pose=base_pick, orien=self.fix_orien)
         
 
@@ -129,6 +167,9 @@ class HandEyeCalibrator(Node):
         )
         self.home_joint_states = self.config.home_joint_states.toDict()
         self.fix_orien = normalise_quaterion(self.config.eff_ready_orien)
+
+        self.work_R = self.config.work_R
+        self.work_r = self.config.work_r
 
 
         self._initialize_gripper()
@@ -217,14 +258,13 @@ class HandEyeCalibrator(Node):
     def run(self):
         
         self.gripper.grasp()
-        self.go_home()
         
         while True:
+            self.update_calibration()
             self.go_home()
-            
             pick_pixel = self.get_pick_pixel()
             self.pixel_pick_touch(pick_pixel)
-            self.update_calibration()
+            
 
 
 

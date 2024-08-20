@@ -32,13 +32,19 @@ eff_ready_orien: [0.70, 0.70, 0.0, 0.0]
 fix_orien: [0.70, 0.70, 0.0, 0.0]
 work_R: 0.52
 work_r: 0.24
+
+
+
+
+
+
 ##########################
 ## Robot Gripper Config ##
 ##########################
 robot_gripper: "active_parallel_gripper"
 
 # CAUTION!!! following value needs to be calibrated
-g2e_offset: 0.1825
+g2e_offset: 0.162
 
 ###################
 ## Camera Config ##

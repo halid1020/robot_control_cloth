@@ -12,8 +12,8 @@ import cv2
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
 def quaternion_to_euler(q):
-            r = R.from_quat(q)
-            return r.as_euler('xyz', degrees=True)
+    r = R.from_quat(q)
+    return r.as_euler('xyz', degrees=True)
 
 def euler_to_quaternion(euler):
     r = R.from_euler('xyz', euler, degrees=True)

@@ -23,10 +23,7 @@ from geometry_msgs.msg import PoseStamped
 from cv_bridge import CvBridge
 
 from robot_control_cloth.msg import NormPixelPnP, Observation, Reset, WorldPnP
-from utils import add_quaternions, camera2base, \
-    pixel2camera, camera2pixel, MyPos, \
-    pixel2base, load_config, prepare_posestamped, \
-    normalise_quaterion, save_color, save_depth
+from utils import *
 
 from active_gripper_control import ActiveGripperControl
 from camera_image_retriever import CameraImageRetriever
@@ -73,12 +70,16 @@ class QuasiStaticPickAndPlace(Node):
 
     def pnp_callback(self, pnp):
         print("Received pnp: %s", pnp.data)
+        
+        orien_degree = pnp.degree
         pnp = np.asarray(pnp.data)
 
 
         ### Post Process, Convert form pixel space to base space
         pixel_pnp = self.norm2pixel_pnp(pnp)
-        self.pixel_pick_and_place(pixel_pnp[:2], pixel_pnp[2:], pick_depth_estimate=True)
+        self.pixel_pick_and_place(pixel_pnp[:2], pixel_pnp[2:], 
+                                  pick_orien=orien_degree,
+                                  pick_depth_estimate=True)
         self.go_home()
         self.publish_observation()
     
@@ -98,44 +99,53 @@ class QuasiStaticPickAndPlace(Node):
         self.publish_observation()
 
 
-    def pixel_pick_and_place(self, pick_pixel, place_pixel, pick_depth_estimate=False):
+    def pixel_pick_and_place(self, pick_pixel, place_pixel, 
+                             pick_orien=0.0, 
+                             pick_depth_estimate=False):
         
         
         estimated_depth = self.camera_height
 
-        if pick_depth_estimate:
-            depth_images = [self.take_cropped_rgbd()[1] for _ in range(5)]
-             # Define a small region around the pick pixel
-            region_size = 5  # 5x5 pixel region
-            x, y = pick_pixel
-            
-            depth_values = []
-            
-            for depth_image in depth_images:
-                region = depth_image[y-region_size//2:y+region_size//2+1, 
-                                    x-region_size//2:x+region_size//2+1]
-                
-                # Filter out zero values (which often indicate invalid measurements)
-                valid_depths = region[region > 0]
-                
-                if len(valid_depths) > 0:
-                    depth_values.append(np.median(valid_depths))
-            
-            estimated_depth = min(np.median(depth_values), self.camera_height)
+        orien = self.fix_orien
 
-            self.logger.info(f"Estiamted pick depth {estimated_depth}")
+        cur_orien_degree = quaternion_to_euler(self.fix_orien)
+        cur_orien_degree[2] += pick_orien
+        orien = euler_to_quaternion(cur_orien_degree)
+
+
+        # if pick_depth_estimate:
+        #     depth_images = [self.take_cropped_rgbd()[1] for _ in range(5)]
+        #      # Define a small region around the pick pixel
+        #     region_size = 5  # 5x5 pixel region
+        #     x, y = pick_pixel
+            
+        #     depth_values = []
+            
+        #     for depth_image in depth_images:
+        #         region = depth_image[y-region_size//2:y+region_size//2+1, 
+        #                             x-region_size//2:x+region_size//2+1]
+                
+        #         # Filter out zero values (which often indicate invalid measurements)
+        #         valid_depths = region[region > 0]
+                
+        #         if len(valid_depths) > 0:
+        #             depth_values.append(np.median(valid_depths))
+            
+        #     estimated_depth = min(np.median(depth_values), self.camera_height)
+
+        #     self.logger.info(f"Estiamted pick depth {estimated_depth}")
              
         
         self.logger.info(\
             f"pixel2base pixel {pick_pixel} depth {estimated_depth} intrinsic {self.camera_intrinstic} camera pose {self.camera_pos}")
-        base_pick = pixel2base(pick_pixel, self.camera_intrinstic, 
-                               self.camera_pos, estimated_depth)
-        base_pick = MyPos(pose=base_pick, orien=self.fix_orien)
+        base_pick = pixel2base([pick_pixel], self.camera_intrinstic, 
+                               self.camera_pos, [estimated_depth])[0]
+        base_pick = MyPos(pose=base_pick, orien=orien)
         
         # print('Coverted pick z', base_pick.pose[2])       
-        base_place = pixel2base(place_pixel, self.camera_intrinstic, 
-                                self.camera_pos, self.camera_height)
-        base_place = MyPos(pose=base_place, orien=self.fix_orien)
+        base_place = pixel2base([place_pixel], self.camera_intrinstic, 
+                                self.camera_pos, self.camera_height)[0]
+        base_place = MyPos(pose=base_place, orien=orien)
         self.logger.info(
             f"Calculated base pick {base_pick}, base place {base_place}"
         )
@@ -169,9 +179,10 @@ class QuasiStaticPickAndPlace(Node):
 
     def _initialize_camera(self):
         
+        camera_orien = euler_to_quaternion(self.config.camera_orien)
         self.camera_pos = MyPos(
             pose=self.config.camera_pose,
-            orien=normalise_quaterion(self.config.camera_orien)
+            orien=normalise_quaterion(camera_orien)
         )
         self.camera_height = self.config.camera_pose[2]
 
@@ -273,18 +284,18 @@ class QuasiStaticPickAndPlace(Node):
         org_image = image.copy()
         H, W = image.shape[:2]
         min_val = int(min(H*self.config.crop_scale, W*self.config.crop_scale))
-        self.px_off = (W - min_val)//2
-        self.py_off = (H - min_val)//2
+        # self.px_off = (W - min_val)//2
+        # self.py_off = (H - min_val)//2
         self.resol = min_val
         mid_x =  W//2
         mid_y = H//2
         # Calculate the coordinates of the cropping rectangle
-        start_x = mid_x - min_val // 2
-        start_y = mid_y - min_val // 2
-        end_x = mid_x + min_val // 2
-        end_y = mid_y + min_val // 2
+        self.start_x = mid_x - min_val // 2
+        self.start_y = mid_y - min_val // 2
+        self.end_x = mid_x + min_val // 2
+        self.end_y = mid_y + min_val // 2
 
-        image = image[start_y:end_y, start_x:end_x]
+        image = image[self.start_y:self.end_y, self.start_x:self.end_x]
 
         if not annotation:
             return image
@@ -292,9 +303,9 @@ class QuasiStaticPickAndPlace(Node):
          # Create a mask for the cropped area
         mask = np.zeros_like(org_image, dtype=np.uint8)
         if len(org_image.shape) == 3:  # Color image
-            mask[start_y:end_y, start_x:end_x] = (1, 1, 1)
+            mask[self.start_y:self.end_y, self.start_x:self.end_x] = (1, 1, 1)
         else:  # Grayscale image (depth)
-            mask[start_y:end_y, start_x:end_x] = 1
+            mask[self.start_y:self.end_y, self.start_x:self.end_x] = 1
         
         # Dim the background
         dimmed_image = org_image * 0.5  # Dim the entire image
@@ -373,10 +384,10 @@ class QuasiStaticPickAndPlace(Node):
         # print('py off', self.py_off)
         # print('px off', self.py_off)
         pix_pnp = (pnp+1)/2 * self.resol
-        pix_pnp[0] += self.py_off
-        pix_pnp[2] += self.py_off
-        pix_pnp[1] += self.px_off
-        pix_pnp[3] += self.px_off
+        pix_pnp[0] += self.start_x
+        pix_pnp[2] += self.start_x
+        pix_pnp[1] += self.start_y
+        pix_pnp[3] += self.start_y
         print('!!!Pixel Pnp', pix_pnp)
         return pix_pnp
 
@@ -468,9 +479,9 @@ if __name__ == '__main__':
     # Initialize QuasiStaticPickAndPlace with the loaded configuration
     qspnp = QuasiStaticPickAndPlace(config=config, mock=False)
 
-    #qspnp.run()
+    qspnp.run()
     #qspnp.test_world_pick_and_place()
-    qspnp.test_camera(crop=True)
+    #qspnp.test_camera(crop=True)
     #qspnp.test_pixel_pick_and_place([1, 1, -1, -1])
     # qspnp.test_pixel_pick_and_place()
     

@@ -1,3 +1,7 @@
+import time
+import select
+import sys
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import pyrealsense2 as rs
@@ -11,8 +15,36 @@ import cv2
 from scipy.ndimage import distance_transform_edt
 from scipy.ndimage import distance_transform_edt, sobel
 import math
+import torch
+
+from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
+from segment_anything import sam_model_registry
+from agent_arena.utilities.visualisation_utils import draw_pick_and_place, filter_small_masks
+
 
 MyPos = namedtuple('Pos', ['pose', 'orien'])
+
+def wait_for_user_input(timeout=1):
+    """
+    Wait for user input for a specified timeout period.
+    Returns True if input is received, False otherwise.
+    """
+    print("\n\nUser Action !!!!\nPlease Press [Enter] to finish, or wait 1 second to continue...\n\n")
+    rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+    if rlist:
+        sys.stdin.readline()
+        return True
+    return False
+
+def get_mask_generator():
+    DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    print('Device {}'.format(DEVICE))
+
+    ### Masking Model Macros ###
+    MODEL_TYPE = "vit_h"
+    sam = sam_model_registry[MODEL_TYPE](checkpoint='sam_vit_h_4b8939.pth')
+    sam.to(device=DEVICE)
+    return SamAutomaticMaskGenerator(sam)
 
 
 def get_orientation(point, mask):
@@ -113,12 +145,20 @@ def imgmsg_to_cv2_custom(img_msg, encoding="bgr8"):
     return image
 
 def save_color(img, filename='color', directory="."):
-    cv2.imwrite('{}/{}.png'.format(directory, filename), img)
+    img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    cv2.imwrite('{}/{}.png'.format(directory, filename), img_bgr)
 
-def save_depth(depth, filename='depth', directory="."):
+def save_depth(depth, filename='depth', directory=".", colour=False):
     depth = (depth - np.min(depth))/(np.max(depth) - np.min(depth))
-    depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_JET)
+    if colour:
+        depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_JET)
+    else:
+        depth = np.uint8(255 * depth)
     cv2.imwrite('{}/{}.png'.format(directory, filename), depth)
+
+def save_mask(mask, filename='mask', directory="."):
+    mask = mask.astype(np.int8)*255
+    cv2.imwrite('{}/{}.png'.format(directory, filename), mask)
 
 def normalise_quaterion(q):
     q = np.array(q)

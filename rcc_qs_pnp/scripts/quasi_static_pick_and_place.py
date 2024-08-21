@@ -267,7 +267,7 @@ class QuasiStaticPickAndPlace(Node):
         distance = np.linalg.norm(direction)
         direction = direction / distance  # Normalize direction
 
-        step_size = 0.3
+        step_size = 0.2
         num_steps = int(distance / step_size)
         
         for step in range(num_steps):

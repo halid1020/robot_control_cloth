@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>robot_control_cloth</name>
+  <name>rcc_qs_pnp</name>
   <version>0.0.1</version>
   <description>Robot control for cloth manipulation</description>
   <maintainer email="your_email@example.com">Your Name</maintainer>

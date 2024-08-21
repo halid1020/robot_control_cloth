@@ -43,7 +43,8 @@ git clone <this repo>
 6. Right under `<ws_name>`
 ```
 source /opt/ros/humble/setup.bash
-colcon build --packages-select robot_control_cloth
+mkdir rcc_build
+colcon build --base-paths ../
 ```
 
 ## III. Run Quasi-Static Pick-and-Place Robot Control Program
@@ -60,9 +61,9 @@ ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168
 3. Right under `<ws_name>`
 ```
 source /opt/ros/humble/setup.bash
-source install/setup.sh
+source <path-to-workspace>rcc_build/install/setup.shh
 
-ros2 launch robot_control_cloth \
+ros2 launch rcc_qs_pnp \
     ur_robot_moveit_executable_launch.py \
     ur_type:=ur3e \
     executable:=quasi_static_pick_and_place.py \
@@ -74,9 +75,9 @@ ros2 launch robot_control_cloth \
     a. Human interace
     ```
     source /opt/ros/humble/setup.bash
-    source install/setup.sh
+    source <path-to-workspace>rcc_build/install/setup.sh
     
-    ros2 run robot_control_cloth human_interface.py
+    ros2 run rcc_qs_pnp human_interface.py
     ```
 
     b. Following the [`agent-arena`'s ROS2 `Humble` setup]() for autimatically generate pick-and-place policy.
@@ -87,23 +88,67 @@ ros2 launch robot_control_cloth \
 1. Test ur3e robot with moveit
 ```
 source /opt/ros/humble/setup.bash
-source install/setup.sh
+source <path-to-workspace>rcc_build/install/setup.sh
 
-ros2 launch robot_control_cloth ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:ur3e_robot_moveit.py
+ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:ur3e_robot_moveit.py
 ```
 
 2. Test active gripper
 ```
 source /opt/ros/humble/setup.bash
-source install/setup.sh
+source <path-to-workspace>rcc_build/install/setup.sh
 
-ros2 run robot_control_cloth active_gripper_control.py
+ros2 run rcc_qs_pnp active_gripper_control.py
 ```
 
 4. Test whole system
 ```
 source /opt/ros/humble/setup.bash
-source install/setup.sh
+source <path-to-workspace>rcc_build/install/setup.sh
 
-ros2 launch robot_control_cloth ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:=test_whole_system.py
+ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:=test_whole_system.py
+```
+
+## V. Build and Run integration with `agent-arena`
+1. Build
+```
+cd <path-to-agent-arena>
+. ./setup.sh
+source $CONDA_PREFIX/setup.bash
+```
+
+```
+cd <path-to-workspace>
+mkdir agar_build
+cd agar_build
+colcon build --packages-select rcc_msgs --base-paths ../
+source install/setup.bash
+```
+
+2. Run `agent-arena` scripts for sending policies to robot
+
+```
+cd <path-to-agent-arena>
+. ./setup.sh
+source $CONDA_PREFIX/setup.bash
+source <path-to-workspace>/agar_build/install/setup.bash
+```
+
+a. human_interace
+
+```
+cd <path-to-workspace>/rcc_qs_pnp/policies
+python human_interface.py
+```
+
+## VI. Video Recording
+
+Video Recording Start
+```
+ffmpeg -f v4l2 -video_size 1920x1080 -framerate 30 -i /dev/video6 -c:v libx264 -crf 23 -preset medium -bufsize 5M output.mp4
+```
+
+Video Recoding Stop
+```
+pkill -SIGINT ffmpeg
 ```

@@ -15,25 +15,27 @@ class CameraImageRetriever(Node):
         super().__init__('camera_image_retriever')
         self.pipeline = rs.pipeline()
         config = rs.config()
-        config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        config.enable_stream(rs.stream.depth, 1280, 720, rs.format.z16, 30)
+        config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
         self.pipeline.start(config)
         align_to = rs.stream.color
         self.align = rs.align(align_to)
 
         ### Depth Camera Macros ###
         self.colorizer = rs.colorizer()
-        self.decimation = rs.decimation_filter()
-        self.decimation.set_option(rs.option.filter_magnitude, 2) #4
-        self.depth_to_disparity = rs.disparity_transform(True)
-        self.disparity_to_depth = rs.disparity_transform(False)
-        self.spatial = rs.spatial_filter()
-        self.spatial.set_option(rs.option.holes_fill, 2) #3
-        self.spatial.set_option(rs.option.filter_magnitude, 5) #5
-        self.spatial.set_option(rs.option.filter_smooth_alpha, 1) #1
-        self.spatial.set_option(rs.option.filter_smooth_delta, 50) #50
+        # self.decimation = rs.decimation_filter()
+        # self.decimation.set_option(rs.option.filter_magnitude, 2) #4
+        # self.depth_to_disparity = rs.disparity_transform(True)
+        # self.disparity_to_depth = rs.disparity_transform(False)
+        # self.spatial = rs.spatial_filter()
+        # self.spatial.set_option(rs.option.holes_fill, 2) #3
+        # self.spatial.set_option(rs.option.filter_magnitude, 2) #5
+        # self.spatial.set_option(rs.option.filter_smooth_alpha, 0.5) #1
+        # self.spatial.set_option(rs.option.filter_smooth_delta, 20) #50
         self.hole_filling = rs.hole_filling_filter()
         self.temporal = rs.temporal_filter()
+        self.temporal.set_option(rs.option.filter_smooth_alpha, 0.2)
+        self.temporal.set_option(rs.option.filter_smooth_delta, 24)
         self.camera_height = camera_height
 
         self.take_rgbd()
@@ -43,11 +45,11 @@ class CameraImageRetriever(Node):
         raw_depth_data = np.asarray(depth_frame.get_data()).astype(float)/1000
         save_depth(raw_depth_data, filename='raw_depth', directory='./tmp')
         #print('raw depth', H, W)
-        depth_frame = self.decimation.process(depth_frame)
-        depth_frame = self.depth_to_disparity.process(depth_frame)
-        depth_frame = self.spatial.process(depth_frame)
+        # depth_frame = self.decimation.process(depth_frame)
+        # depth_frame = self.depth_to_disparity.process(depth_frame)
+        #depth_frame = self.spatial.process(depth_frame)
         depth_frame = self.temporal.process(depth_frame)
-        depth_frame = self.disparity_to_depth.process(depth_frame)
+        #depth_frame = self.disparity_to_depth.process(depth_frame)
         depth_frame = self.hole_filling.process(depth_frame)
 
         depth_data = np.asarray(depth_frame.get_data()).astype(float)/1000

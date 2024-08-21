@@ -11,6 +11,13 @@ import cv2
 
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
+def quaternion_to_euler(q):
+    r = R.from_quat(q)
+    return r.as_euler('xyz', degrees=True)
+
+def euler_to_quaternion(euler):
+    r = R.from_euler('xyz', euler, degrees=True)
+    return r.as_quat()
 
 def save_color(img, filename='color', directory="."):
     cv2.imwrite('{}/{}.png'.format(directory, filename), img)
@@ -19,6 +26,10 @@ def save_depth(depth, filename='depth', directory="."):
     depth = (depth - np.min(depth))/(np.max(depth) - np.min(depth))
     depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_JET)
     cv2.imwrite('{}/{}.png'.format(directory, filename), depth)
+
+def save_mask(mask, filename='mask', direcotry="."):
+    mask = mask.astype(np.int8)*255
+    cv2.imwrite('{}/{}.png'.format(direcotry, filename), mask)
 
 def normalise_quaterion(q):
     q = np.array(q)
@@ -74,31 +85,69 @@ def add_quaternions(quat1, quat2):
 #     particle_base = np.matmul(rotation_matrix, particles_camera) + np.array(camera_pose)
 #     return particle_base
 
+# def camera2base(camera_pos: MyPos, particles_camera):
+#     camera_pose = camera_pos.pose
+#     camera_orientation_quat = camera_pos.orien
+#     r = R.from_quat(camera_orientation_quat)
+#     rotation_matrix = r.as_matrix()
+#     particles_camera = np.array(particles_camera)
+#     particle_base = np.matmul(rotation_matrix, particles_camera) + np.array(camera_pose)
+#     return particle_base
+
+# def pixel2camera(pixel_point, depth, intrinsic):
+#     pixel_point = [int(pixel_point[0]), int(pixel_point[1])]
+#     return rs.rs2_deproject_pixel_to_point(intrinsic, pixel_point, depth)
+
+# def camera2pixel(point_3d, intrinsic):
+#     pixel = rs.rs2_project_point_to_pixel(intrinsic, point_3d)
+#     return pixel
+
+# def pixel2base(pixel_point, camera_intrinsic, camera_pos:MyPos, depth):
+    
+#     camera_p = pixel2camera(pixel_point, depth, camera_intrinsic)
+    
+    
+#     base_p = camera2base(camera_pos, camera_p)
+
+#     return base_p
+
 def camera2base(camera_pos: MyPos, particles_camera):
-    camera_pose = camera_pos.pose
+    camera_pose = np.array(camera_pos.pose)
     camera_orientation_quat = camera_pos.orien
     r = R.from_quat(camera_orientation_quat)
     rotation_matrix = r.as_matrix()
-    particles_camera = np.array(particles_camera)
-    particle_base = np.matmul(rotation_matrix, particles_camera) + np.array(camera_pose)
+    
+    particles_camera = np.atleast_2d(particles_camera)
+    
+    particle_base = np.dot(particles_camera, rotation_matrix.T) + camera_pose
+    
     return particle_base
 
-def pixel2camera(pixel_point, depth, intrinsic):
-    pixel_point = [int(pixel_point[0]), int(pixel_point[1])]
-    return rs.rs2_deproject_pixel_to_point(intrinsic, pixel_point, depth)
-
-def camera2pixel(point_3d, intrinsic):
-    pixel = rs.rs2_project_point_to_pixel(intrinsic, point_3d)
-    return pixel
-
-def pixel2base(pixel_point, camera_intrinsic, camera_pos:MyPos, depth):
+def pixel2camera(pixel_points, depths, intrinsic):
+    pixel_points = np.atleast_2d(pixel_points).astype(int)
+    depths = np.atleast_1d(depths)
     
-    camera_p = pixel2camera(pixel_point, depth, camera_intrinsic)
-    
-    
-    base_p = camera2base(camera_pos, camera_p)
+    camera_points = []
+    for pixel, depth in zip(pixel_points, depths):
+        camera_points.append(rs.rs2_deproject_pixel_to_point(intrinsic, pixel.tolist(), depth))
+    return np.array(camera_points)
 
-    return base_p
+def camera2pixel(points_3d, intrinsic):
+    points_3d = np.atleast_2d(points_3d)
+    
+    pixels = []
+    for point in points_3d:
+        pixels.append(rs.rs2_project_point_to_pixel(intrinsic, point.tolist()))
+    return np.array(pixels)
+
+def pixel2base(pixel_points, camera_intrinsic, camera_pos: MyPos, depths):
+    pixel_points = np.atleast_2d(pixel_points)
+    depths = np.atleast_1d(depths)
+    
+    camera_points = pixel2camera(pixel_points, depths, camera_intrinsic)
+    base_points = camera2base(camera_pos, camera_points)
+    
+    return base_points
 
 def interpolate_positions(start_pos, target_pos, num_points=100):
     return np.linspace(start_pos, target_pos, num_points)

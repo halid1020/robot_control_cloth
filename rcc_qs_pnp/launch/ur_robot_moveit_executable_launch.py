@@ -138,10 +138,10 @@ def launch_setup(context, *args, **kwargs):
         .robot_description_semantic(file_path=get_package_share_directory("ur_moveit_config") + \
                                     "/srdf/ur.srdf.xacro", mappings={"name": "ur"})
         .planning_scene_monitor()
-        .pilz_cartesian_limits(file_path=get_package_share_directory("robot_control_cloth") + \
+        .pilz_cartesian_limits(file_path=get_package_share_directory("rcc_qs_pnp") + \
                                "/config/pilz_cartesian_limits.yaml")
         .moveit_cpp(
-            file_path=get_package_share_directory("robot_control_cloth")
+            file_path=get_package_share_directory("rcc_qs_pnp")
             + f"/config/{planner}_moveit_cpp.yaml"
         )
         .to_moveit_configs()
@@ -257,7 +257,7 @@ def launch_setup(context, *args, **kwargs):
     moveit_dict.update(trajectory_execution)
    
     moveit_py_node = Node(
-        package="robot_control_cloth",  # Replace with the actual package containing moveit_test.py
+        package="rcc_qs_pnp",  # Replace with the actual package containing moveit_test.py
         executable=executable,
         output="screen",
         name="ur3e_robot_moveit",

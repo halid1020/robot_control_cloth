@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-project(robot_control_cloth)
+project(rcc_qs_pnp)
 
 # Use C++14
 set(CMAKE_CXX_STANDARD 14)
@@ -14,21 +14,22 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(moveit_py REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
+# find_package(rcc_msgs REQUIRED)
 
 # Define message files
-set(msg_files
-  "msg/NormPixelPnP.msg"
-  "msg/Observation.msg"
-  "msg/Reset.msg"
-  "msg/WorldPnP.msg"
-)
+# set(msg_files
+#   "msg/NormPixelPnP.msg"
+#   "msg/Observation.msg"
+#   "msg/Reset.msg"
+#   "msg/WorldPnP.msg"
+# )
 
 
 # Generate messages
-rosidl_generate_interfaces(${PROJECT_NAME}
-  ${msg_files}
-  DEPENDENCIES builtin_interfaces std_msgs geometry_msgs sensor_msgs
-)
+# rosidl_generate_interfaces(${PROJECT_NAME}
+#   ${msg_files}
+#   DEPENDENCIES builtin_interfaces std_msgs geometry_msgs sensor_msgs
+# )
 
 # Install Python scripts
 install(PROGRAMS
@@ -38,7 +39,6 @@ install(PROGRAMS
   scripts/active_gripper_control.py
   scripts/camera_image_retriever.py
   scripts/test_whole_system.py
-  scripts/human_interface.py
   scripts/hand_eye_calibrator.py
   DESTINATION lib/${PROJECT_NAME}
 )

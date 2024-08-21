@@ -22,7 +22,7 @@ from std_msgs.msg import Header
 from geometry_msgs.msg import PoseStamped
 from cv_bridge import CvBridge
 
-from robot_control_cloth.msg import NormPixelPnP, Observation, Reset, WorldPnP
+from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from utils import *
 
 from active_gripper_control import ActiveGripperControl

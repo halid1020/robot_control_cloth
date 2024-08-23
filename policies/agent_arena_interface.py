@@ -119,7 +119,7 @@ class AgentArenaInterface(ControlInterface):
         self.agent.init(state)
     
     def update(self, state, action):
-        self.agent.update(state, action)
+        self.agent.update(state, np.asarray(action['pick-and-place']))
 
     def get_state(self):
         return self.agent.get_state()
@@ -155,6 +155,7 @@ class AgentArenaInterface(ControlInterface):
                 -np.ones((1, 4)).astype(np.float32),
                 np.ones((1, 4)).astype(np.float32),
                 dtype=np.float32),
+            'sim2real': True
         }
 
         return state
@@ -164,6 +165,7 @@ def parse_arguments():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser()
     parser.add_argument('--task', default='flattening')
+    parser.add_argument('--domain', default='sim2real-rect-fabric')
     parser.add_argument('--agent', default='transporter')
     parser.add_argument('--config', default='MJ-TN-2000-rgb-maskout-rotation-90')
     parser.add_argument('--log_dir', default='/home/ah390/Data')
@@ -180,15 +182,15 @@ if __name__ == "__main__":
     ### Initialise Agent ####
     print('Initialise Agent ...')
     if args.task == 'flattening':
-        domain = 'sim2real-rect-fabric'
+        #domain = 'sim2real-rect-fabric'
         initial = 'crumple'
     elif args.task in ['double-side-folding', 'rectangular-folding']:
-        domain = 'sim2real-rect-fabric'
+        #domain = 'sim2real-rect-fabric'
         initial = 'flatten'
     else:
-        domain = 'sim2real-square-fabric'
+        #domain = 'sim2real-square-fabric'
         initial = 'flatten'
-    
+    domain = args.domain
     if args.task == 'all-corner-inward-folding':
         max_steps = 4
     elif args.task == 'corners-edge-inward-folding':

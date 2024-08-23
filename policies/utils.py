@@ -16,13 +16,41 @@ from scipy.ndimage import distance_transform_edt
 from scipy.ndimage import distance_transform_edt, sobel
 import math
 import torch
-
+import signal
 from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from segment_anything import sam_model_registry
 from agent_arena.utilities.visualisation_utils import draw_pick_and_place, filter_small_masks
 
+import subprocess
+import shlex
 
 MyPos = namedtuple('Pos', ['pose', 'orien'])
+
+
+def start_ffmpeg_recording(output_file, device='/dev/video6', resolution='1920x1080', framerate=30):
+    """
+    Start FFmpeg recording in the background.
+    
+    :param output_file: Name of the output file (e.g., 'output.mp4')
+    :param device: Input device (default: '/dev/video6')
+    :param resolution: Video resolution (default: '1920x1080')
+    :param framerate: Frame rate (default: 30)
+    :return: Subprocess object
+    """
+    if os.path.exists(output_file):
+        print('Remove old record!')
+        os.remove(output_file)
+    command = f"ffmpeg -f v4l2 -video_size {resolution} -framerate {framerate} -i {device} " \
+              f"-c:v libx264 -crf 23 -preset medium -bufsize 5M {output_file}"
+    
+    # Split the command string into a list of arguments
+    args = shlex.split(command)
+    
+    # Start the FFmpeg process
+    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    
+    print(f"FFmpeg recording started. Output file: {output_file}")
+    return process
 
 def wait_for_user_input(timeout=1):
     """
@@ -32,7 +60,8 @@ def wait_for_user_input(timeout=1):
     print("\n\nUser Action !!!!\nPlease Press [Enter] to finish, or wait 1 second to continue...\n\n")
     rlist, _, _ = select.select([sys.stdin], [], [], timeout)
     if rlist:
-        sys.stdin.readline()
+        os.read(sys.stdin.fileno(), 1024)
+        #sys.stdin.readline()
         return True
     return False
 
@@ -69,6 +98,39 @@ def get_orientation(point, mask):
     
     return orientation_deg
 
+
+def stop_ffmpeg_recording(process):
+    """
+    Stop the FFmpeg recording process gracefully.
+    
+    :param process: Subprocess object returned by start_ffmpeg_recording
+    :return: None
+    """
+    #time.sleep(1)
+    process.terminate()
+    #os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        
+        # # Wait for the process to finish (with a timeout)
+        # try:
+        #     process.wait(timeout=10)
+        #     print("FFmpeg recording stopped successfully.")
+        # except subprocess.TimeoutExpired:
+        #     print("FFmpeg didn't stop gracefully. Forcing termination...")
+        #     process.terminate()
+        #     try:
+        #         process.wait(timeout=5)
+        #     except subprocess.TimeoutExpired:
+        #         print("FFmpeg still didn't terminate. Killing the process...")
+        #         process.kill()
+        
+        # # Ensure the process is terminated
+        # if process.poll() is None:
+        #     print("Failed to stop FFmpeg recording.")
+        # else:
+        #     print("FFmpeg recording has been stopped.")
+    # else:
+    #     print("FFmpeg recording was not running.")
+
 def visualize_points_and_orientations(mask, points_with_orientations, line_length=10):
     # Ensure mask is 8-bit single-channel
     if mask.dtype != np.uint8:
@@ -88,7 +150,7 @@ def visualize_points_and_orientations(mask, points_with_orientations, line_lengt
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-def adjust_points(points, mask, min_distance=2):
+def adjust_points(points, mask, min_distance=3):
     """
     Adjust points to be at least min_distance pixels away from the mask border.
     

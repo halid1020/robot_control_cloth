@@ -15,7 +15,7 @@ from utils import *
 
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',
-                 adjust_pick=False, adjust_orien=False):
+                 adjust_pick=False, adjust_orien=False, video_device='/dev/video6'):
         super().__init__(f"{name}_interface")
         self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
         self.pnp_pub = self.create_publisher(NormPixelPnP, '/norm_pixel_pnp', 10)
@@ -30,6 +30,9 @@ class ControlInterface(Node):
         self.trj_name = ''
         self.adjust_pick = adjust_pick
         self.adjust_orient = adjust_orien
+        self.video_device = video_device
+        self.video_process = None
+        #self.estimate_pick_depth = estimate_pick_dpeth
 
         print('Finish Init Control Interface')
 
@@ -178,11 +181,18 @@ class ControlInterface(Node):
         pass
 
     def reset(self):
+
+        print('Reset!')
         self.step = -1
         self.last_action = None
+        if self.video_process is not None:
+            print('Stop recording!')
+            stop_ffmpeg_recording(self.video_process)
         while True:
             is_continue = input('Continue for a new trial? (y/n): ')
             if is_continue == 'n':
+                if self.video_process is not None:
+                    stop_ffmpeg_recording(self.video_process)
                 rclpy.shutdown()
                 exit()
             elif is_continue == 'y':
@@ -191,8 +201,17 @@ class ControlInterface(Node):
             else:
                 print('Invalid input')
                 continue
+        self.start_video()
         self.publish_reset()
         print('pubslied reset!')
+
+    def start_video(self):
+        if self.video_device is not None:
+            save_dir = os.path.join(self.save_dir, self.trj_name)
+            os.makedirs(save_dir, exist_ok=True)
+            output_file = os.path.join(save_dir, 'record.mp4')
+            self.video_process = start_ffmpeg_recording(output_file, self.video_device)
+        
 
     def update(self, state, aciton):
         pass

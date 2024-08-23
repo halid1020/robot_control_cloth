@@ -36,7 +36,7 @@ from rclpy.node import Node
 
 class QuasiStaticPickAndPlace(Node):
 
-    def __init__(self, config, mock=False):
+    def __init__(self, config, mock=False, estimate_pick_depth=False):
         super().__init__('quasi_static_pick_and_place')
         #rospy.init_node('quasi_static_pick_and_place', anonymous=True)
         
@@ -45,6 +45,7 @@ class QuasiStaticPickAndPlace(Node):
 
         self.config = config
         self.is_mock = mock
+        self.estimate_pick_depth = estimate_pick_depth
 
         self._intialize_communication()
 
@@ -78,8 +79,9 @@ class QuasiStaticPickAndPlace(Node):
         ### Post Process, Convert form pixel space to base space
         pixel_pnp = self.norm2pixel_pnp(pnp)
         self.pixel_pick_and_place(pixel_pnp[:2], pixel_pnp[2:], 
-                                  pick_orien=orien_degree,
-                                  pick_depth_estimate=True)
+                                  pick_orien=orien_degree)
+        # ,
+        #                           pick_depth_estimate=True)
         self.go_home()
         self.publish_observation()
     
@@ -100,8 +102,7 @@ class QuasiStaticPickAndPlace(Node):
 
 
     def pixel_pick_and_place(self, pick_pixel, place_pixel, 
-                             pick_orien=0.0, 
-                             pick_depth_estimate=False):
+                             pick_orien=0.0):
         
         
         estimated_depth = self.camera_height
@@ -113,27 +114,33 @@ class QuasiStaticPickAndPlace(Node):
         orien = euler_to_quaternion(cur_orien_degree)
 
 
-        # if pick_depth_estimate:
-        #     depth_images = [self.take_cropped_rgbd()[1] for _ in range(5)]
-        #      # Define a small region around the pick pixel
-        #     region_size = 5  # 5x5 pixel region
-        #     x, y = pick_pixel
-            
-        #     depth_values = []
-            
-        #     for depth_image in depth_images:
-        #         region = depth_image[y-region_size//2:y+region_size//2+1, 
-        #                             x-region_size//2:x+region_size//2+1]
-                
-        #         # Filter out zero values (which often indicate invalid measurements)
-        #         valid_depths = region[region > 0]
-                
-        #         if len(valid_depths) > 0:
-        #             depth_values.append(np.median(valid_depths))
-            
-        #     estimated_depth = min(np.median(depth_values), self.camera_height)
+        if self.estimate_pick_depth:
+            depth_images = [self.camera.take_rgbd()[1] for _ in range(5)]
+            for d in depth_images:
+                if np.isnan(d).any():
+                    self.logger.ERROR("There is nan input in depth images.")
 
-        #     self.logger.info(f"Estiamted pick depth {estimated_depth}")
+            
+             # Define a small region around the pick pixel
+            region_size = 5  # 5x5 pixel region
+            x, y = int(pick_pixel[0]), int(pick_pixel[1])
+            self.logger.info(f'pick point x {x} y{y}')
+            
+            depth_values = []
+            
+            for depth_image in depth_images:
+                
+                region = depth_image[y-region_size//2:y+region_size//2+1, 
+                                    x-region_size//2:x+region_size//2+1]
+                
+                self.logger.info(f"Regions to estimate {region}")
+                
+                # Filter out zero values (which often indicate invalid measurements)
+                depth_values.append(np.median(region))
+            
+            estimated_depth = min(np.median(depth_values) + 0.02, self.camera_height)
+
+            self.logger.info(f"Estiamted pick depth {estimated_depth}")
              
         
         self.logger.info(\
@@ -283,17 +290,20 @@ class QuasiStaticPickAndPlace(Node):
     def _crop_image(self, image, annotation=False):
         org_image = image.copy()
         H, W = image.shape[:2]
-        min_val = int(min(H*self.config.crop_scale, W*self.config.crop_scale))
+        #min_val = int(min(H*self.config.crop_scale, W*self.config.crop_scale))
         # self.px_off = (W - min_val)//2
         # self.py_off = (H - min_val)//2
-        self.resol = min_val
+        self.resol = self.config.crop_resol
+        
         mid_x =  W//2
         mid_y = H//2
         # Calculate the coordinates of the cropping rectangle
-        self.start_x = mid_x - min_val // 2
-        self.start_y = mid_y - min_val // 2
-        self.end_x = mid_x + min_val // 2
-        self.end_y = mid_y + min_val // 2
+        self.start_x = self.config.crop_start_x
+        self.start_y = self.config.crop_start_y
+        self.end_x = self.start_x + self.config.crop_resol + 1
+        self.end_y = self.start_y + self.config.crop_resol + 1
+
+        self.logger.info(f'crop image resol {self.resol}, start_x {self.start_x}, start_y {self.start_y }')
 
         image = image[self.start_y:self.end_y, self.start_x:self.end_x]
 
@@ -413,8 +423,7 @@ class QuasiStaticPickAndPlace(Node):
         pixel_pnp_norm = np.asarray(pixel_pnp)
 
         pixel_pnp = self.norm2pixel_pnp(pixel_pnp_norm)
-        self.pixel_pick_and_place(pixel_pnp[:2], pixel_pnp[2:], 
-                                  pick_depth_estimate=False)
+        self.pixel_pick_and_place(pixel_pnp[:2], pixel_pnp[2:])
         
         if random:
             for _ in range(10):
@@ -425,7 +434,7 @@ class QuasiStaticPickAndPlace(Node):
                 pixel_pnp = self.norm2pixel_pnp(pixel_pnp_norm)
                 
                 # Execute pixel pick and place
-                self.pixel_pick_and_place(pixel_pnp[:2], pixel_pnp[2:], pick_depth_estimate=False)
+                self.pixel_pick_and_place(pixel_pnp[:2], pixel_pnp[2:])#, pick_depth_estimate=False)
         
     def test_camera(self, crop=False):
         self.go_home()
@@ -477,7 +486,7 @@ if __name__ == '__main__':
     rclpy.init()
     
     # Initialize QuasiStaticPickAndPlace with the loaded configuration
-    qspnp = QuasiStaticPickAndPlace(config=config, mock=False)
+    qspnp = QuasiStaticPickAndPlace(config=config, mock=False) #, estimate_pick_depth=True)
 
     qspnp.run()
     #qspnp.test_world_pick_and_place()

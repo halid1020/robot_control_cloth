@@ -8,6 +8,7 @@ from segment_anything import sam_model_registry
 from segment_anything import \
      sam_model_registry, SamAutomaticMaskGenerator
 from gym.spaces import Box
+import traceback
 
 import rclpy
 from rclpy.node import Node
@@ -221,16 +222,23 @@ if __name__ == "__main__":
         agent.load_checkpoint(int(args.eval_checkpoint))
     print('Finsh Initialising Agent ...')
 
-    rclpy.init()
+    try:
+        rclpy.init()
 
-    adjust_pick=True
-    adjust_orien=True
+        adjust_pick=True
+        adjust_orien=True
 
-    ### Run Sim2Real ###
-    sim2real = AgentArenaInterface(
-        agent, args.task, args.config, 
-        args.eval_checkpoint, max_steps, 
-        adjust_orien=adjust_orien, adjust_pick=adjust_pick)
-    
-    sim2real.run()
-    rclpy.shutdown()
+        ### Run Sim2Real ###
+        sim2real = AgentArenaInterface(
+            agent, args.task, args.config, 
+            args.eval_checkpoint, max_steps, 
+            adjust_orien=adjust_orien, adjust_pick=adjust_pick)
+        
+        sim2real.run()
+    except Exception as e:
+        print(f'Caught exception: {e}')
+        print('Stack trace:')
+        traceback.print_exc()
+        sim2real.stop_video()
+        rclpy.try_shutdown()
+        sim2real.destroy_node()

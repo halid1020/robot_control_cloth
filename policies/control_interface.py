@@ -185,14 +185,11 @@ class ControlInterface(Node):
         print('Reset!')
         self.step = -1
         self.last_action = None
-        if self.video_process is not None:
-            print('Stop recording!')
-            stop_ffmpeg_recording(self.video_process)
+        
         while True:
             is_continue = input('Continue for a new trial? (y/n): ')
             if is_continue == 'n':
-                if self.video_process is not None:
-                    stop_ffmpeg_recording(self.video_process)
+                self.stop_video
                 rclpy.shutdown()
                 exit()
             elif is_continue == 'y':
@@ -204,6 +201,11 @@ class ControlInterface(Node):
         self.start_video()
         self.publish_reset()
         print('pubslied reset!')
+    
+    def stop_video(self):
+        if self.video_process is not None:
+            print('Stop recording!')
+            stop_ffmpeg_recording(self.video_process)
 
     def start_video(self):
         if self.video_device is not None:

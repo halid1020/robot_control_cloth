@@ -103,10 +103,13 @@ class ControlInterface(Node):
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
         self.reset_pub.publish(header)
+        print('Published reset!')
 
 
     def save_step(self, state):
         rgb = state['observation']['rgb']
+        raw_rgb = state['observation']['raw_rgb']
+        full_mask = state['observation']['full_mask']
         depth = state['observation']['depth']
         mask = state['observation']['mask']
         #color_depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_AUTUMN)
@@ -114,12 +117,11 @@ class ControlInterface(Node):
         os.makedirs(save_dir, exist_ok=True)
         print('rgb shape', rgb.shape)
         save_color(rgb, filename='rgb', directory=save_dir)
+        save_color(raw_rgb, filename='raw_rgb', directory=save_dir)
         save_depth(depth, filename='depth', directory=save_dir)
         save_depth(depth, filename='colour_depth', directory=save_dir, colour=True)
         save_mask(mask, filename='mask', directory=save_dir)
-        # cv2.imwrite(f'{save_dir}/rgb.png', rgb)
-        # cv2.imwrite(f'{save_dir}/color_depth.png', color_depth)
-        # cv2.imwrite(f'{save_dir}/depth.png', depth)
+        save_mask(full_mask, filename='full_mask', directory=save_dir)
 
         if 'action' in state:
             action = state['action']
@@ -130,14 +132,59 @@ class ControlInterface(Node):
             with open(f'{save_dir}/action.json', "w") as json_file:
                 json.dump(action, json_file, indent=4)
             #np.save(f'{save_dir}/action.npy', action)
+        
+        if 'evaluation' in state:
+            evaluation = state['evaluation']
+            with open(f'{save_dir}/evaluation.json', "w") as json_file:
+                json.dump(evaluation, json_file, indent=4)
+
+    def evaluate(self, state):
+        current_mask = state['observation']['full_mask']
+        cur_mask_pixels = int(np.sum(current_mask))
+        print('current_mask', cur_mask_pixels)
+
+        if self.step == 0:
+            self.init_mask_pixels = cur_mask_pixels
+
+        res = {
+            'max_coverage': self.max_mask_pixels,
+            'init_coverage': self.init_mask_pixels,
+            'coverage': cur_mask_pixels,
+            'normalised_coverage': 1.0 * cur_mask_pixels/self.max_mask_pixels,
+            'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
+                                              /(self.max_mask_pixels - self.init_mask_pixels), 1), 0)
+        }
+
+        return res
+    
+    def setup_evaluation(self, state):
+        current_mask = state['observation']['full_mask']
+        self.max_mask_pixels = int(np.sum(current_mask))
+        print('max_mask', self.max_mask_pixels )
+        self.setup_init_state()
+
+    def setup_init_state(self):
+        is_continue = input('Plase set a random initial state, enter any keys after setup!')
 
     def img_callback(self, data):
         print('Receive observation data')
-        rgb_image = imgmsg_to_cv2_custom(data.rgb_image, "bgr8")
-        depth_image = imgmsg_to_cv2_custom(data.depth_image, "64FC1")
-        input_state = self.post_process(rgb_image, depth_image)
+        crop_rgb = imgmsg_to_cv2_custom(data.crop_rgb, "bgr8")
+        crop_depth = imgmsg_to_cv2_custom(data.crop_depth, "64FC1")
+        raw_rgb = imgmsg_to_cv2_custom(data.raw_rgb, "bgr8")
+        input_state = self.post_process(crop_rgb, crop_depth, raw_rgb)
 
-        done = (self.step >= self.fix_steps - 1)
+        if self.step == -1:
+            self.step += 1
+            self.setup_evaluation(input_state)
+            self.start_video()
+            self.publish_reset()
+            return
+
+        evaluation = self.evaluate(input_state)
+
+        input_state['evaluation'] = evaluation
+
+        done = (self.step >= self.fix_steps)
 
         
         if wait_for_user_input():
@@ -145,16 +192,16 @@ class ControlInterface(Node):
             done = True
 
         if done:
-            self.step += 1
             self.save_step(input_state)
+            self.step += 1
             self.reset()
             return
-        elif self.step == -1:
+        elif self.step == 0:
             self.init(input_state)
         else:
             self.update(input_state, self.last_action)
     
-        self.step += 1
+        
         action = self.act(input_state)
         internal_state = self.get_state()
 
@@ -171,36 +218,36 @@ class ControlInterface(Node):
             color=(0, 255, 0)
         ).astype(np.uint8)
         action['pick-and-place'] = action['pick-and-place'].reshape(4).tolist()
-        print('save actio', action)
+        #print('save actio', action)
         save_state['action'] = action
         save_state['action_image'] = action_image
         self.save_step(save_state)
+        self.step += 1
         self.publish_action(action)
 
     def act(self, state):
         pass
 
     def reset(self):
-
-        print('Reset!')
         self.step = -1
         self.last_action = None
-        
+        self.stop_video()
+
         while True:
             is_continue = input('Continue for a new trial? (y/n): ')
-            if is_continue == 'n':
-                self.stop_video
-                rclpy.shutdown()
-                exit()
+            if is_continue == 'n':   
+                #rclpy.shutdown()
+                raise NotImplementedError
             elif is_continue == 'y':
                 self.trj_name = input('Enter Trial Name: ')
                 break
             else:
                 print('Invalid input')
                 continue
-        self.start_video()
+        
+        final_state = input('Please reset the final state, please enter any key to conitnue')
+        
         self.publish_reset()
-        print('pubslied reset!')
     
     def stop_video(self):
         if self.video_process is not None:
@@ -228,5 +275,5 @@ class ControlInterface(Node):
         self.reset()
         rclpy.spin(self)
 
-    def post_process(self, rgb, depth, pointcloud=None):
+    def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
         pass

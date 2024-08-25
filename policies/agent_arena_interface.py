@@ -125,7 +125,7 @@ class AgentArenaInterface(ControlInterface):
     def get_state(self):
         return self.agent.get_state()
 
-    def post_process(self, rgb, depth, pointcloud=None):
+    def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
         rgb = cv2.resize(rgb, self.resolution)
         depth = cv2.resize(depth, self.resolution) 
         mask = self.get_mask(rgb)  
@@ -158,6 +158,14 @@ class AgentArenaInterface(ControlInterface):
                 dtype=np.float32),
             'sim2real': True
         }
+
+        if raw_rgb is not None:
+            raw_rgb = raw_rgb[40:-40, 40:-40]
+            full_mask = self.get_mask(raw_rgb)
+            state['observation']['full_mask'] = full_mask
+            raw_rgb =  cv2.cvtColor(raw_rgb, cv2.COLOR_BGR2RGB)
+            state['observation']['raw_rgb'] = raw_rgb
+
 
         return state
 

@@ -342,32 +342,42 @@ class QuasiStaticPickAndPlace(Node):
 
     def get_observation(self):
         
-        color_image, depth_image = self.take_cropped_rgbd()
+        crop_rgb, crop_depth = self.take_cropped_rgbd()
+        raw_rgb, raw_depth = self.camera.take_rgbd()
         #pointcloud = self.get_pointcloud()
 
         return {
-            'depth': depth_image,
-            'color': color_image,
+            'crop_depth': crop_depth,
+            'crop_rgb': crop_rgb,
+            'raw_rgb': raw_rgb,
+            'raw_depth': raw_depth
             #'pointcloud': pointcloud
         }
 
 
     def publish(self, observation):
         # Simulate an RGB image
-        rgb_image = observation['color']
-        depth_image = observation['depth']
+        crop_rgb = observation['crop_rgb']
+        crop_depth = observation['crop_depth']
         
         # Convert OpenCV images to ROS messages
-        rgb_msg = self.bridge.cv2_to_imgmsg(rgb_image, encoding="bgr8")
-        depth_msg = self.bridge.cv2_to_imgmsg(depth_image, encoding="64FC1")
+        crop_rgb_msg = self.bridge.cv2_to_imgmsg(crop_rgb, encoding="bgr8")
+        crop_depth_msg = self.bridge.cv2_to_imgmsg(crop_depth, encoding="64FC1")
+
+        raw_rgb_msg = self.bridge.cv2_to_imgmsg(observation['raw_rgb'], encoding="bgr8")
+        raw_depth_msg = self.bridge.cv2_to_imgmsg(observation['raw_depth'], encoding="64FC1")
         
 
         # Create the custom RGBD message
         obs_msg = Observation()
         obs_msg.header = Header()
         obs_msg.header.stamp = self.get_clock().now().to_msg()
-        obs_msg.rgb_image = rgb_msg
-        obs_msg.depth_image = depth_msg
+        obs_msg.crop_rgb = crop_rgb_msg
+        obs_msg.crop_depth = crop_depth_msg
+
+        obs_msg.raw_rgb = raw_rgb_msg
+        obs_msg.raw_depth = raw_depth_msg
+        
 
         # Publish the message
         self.get_logger().info("Publishing RGBD image")

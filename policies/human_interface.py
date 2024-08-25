@@ -225,11 +225,13 @@ class HumanPickAndPlace(ControlInterface):
     #     self.reset()
     #     rclpy.spin(self)
 
-    def post_process(self, rgb, depth, pointcloud=None):
+    def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
         #mask = self.get_mask(rgb)
         rgb = cv2.resize(rgb, self.resolution)
         depth = cv2.resize(depth, self.resolution)
         mask = self.get_mask(rgb)  
+
+       
 
         norm_depth = (depth - np.min(depth)) / ((np.max(depth) + 0.005) - np.min(depth))
 
@@ -240,6 +242,8 @@ class HumanPickAndPlace(ControlInterface):
                 'mask': mask.copy()
             }
         }
+        
+        
         return state
 
 def main():

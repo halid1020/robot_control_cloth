@@ -57,12 +57,13 @@ def wait_for_user_input(timeout=1):
     Wait for user input for a specified timeout period.
     Returns True if input is received, False otherwise.
     """
-    print("\n\nUser Action !!!!\nPlease Press [Enter] to finish, or wait 1 second to continue...\n\n")
+    print("\n\n[User Attention!] Please Press [Enter] to finish, or wait 1 second to continue...\n\n")
     rlist, _, _ = select.select([sys.stdin], [], [], timeout)
     if rlist:
         os.read(sys.stdin.fileno(), 1024)
         #sys.stdin.readline()
         return True
+    print("\n\n[User Attention!] Continue to next step...\n\n")
     return False
 
 def get_mask_generator():

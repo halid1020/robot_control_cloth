@@ -152,7 +152,8 @@ class ControlInterface(Node):
             'coverage': cur_mask_pixels,
             'normalised_coverage': 1.0 * cur_mask_pixels/self.max_mask_pixels,
             'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
-                                              /(self.max_mask_pixels - self.init_mask_pixels), 1), 0)
+                                              /(self.max_mask_pixels - self.init_mask_pixels), 1), 0),
+            'success': False
         }
 
         return res
@@ -164,7 +165,24 @@ class ControlInterface(Node):
         self.setup_init_state()
 
     def setup_init_state(self):
-        is_continue = input('Plase set a random initial state, enter any keys after setup!')
+        is_continue = input('[User Attention!] Please set a random initial state, and enter any keys after setup to continue!')
+
+    def clean_up(self, state):
+        self.stop_video()
+
+        while True:
+            is_success = input('[User Attention!] Is the task successful? (y/n): ')
+            if is_success == 'y':
+                state['evaluation']['success'] = True
+                break
+            elif is_success == 'n':
+                state['evaluation']['success'] = False
+                break
+            else:
+                print('[User Attention!] Invalid input')
+                continue
+        self.save_step(state)
+        self.reset()
 
     def img_callback(self, data):
         print('Receive observation data')
@@ -192,9 +210,7 @@ class ControlInterface(Node):
             done = True
 
         if done:
-            self.save_step(input_state)
-            self.step += 1
-            self.reset()
+            self.clean_up(input_state)
             return
         elif self.step == 0:
             self.init(input_state)
@@ -228,26 +244,30 @@ class ControlInterface(Node):
     def act(self, state):
         pass
 
+    def setup(self):
+        final_state = input('[User Attention!] Please set to the final state for setup evaluation, please enter any key when finsihed!')
+        self.publish_reset()
+
     def reset(self):
         self.step = -1
         self.last_action = None
-        self.stop_video()
+        
 
         while True:
-            is_continue = input('Continue for a new trial? (y/n): ')
+            is_continue = input('[User Attention!] Continue for a new trial? (y/n): ')
             if is_continue == 'n':   
                 #rclpy.shutdown()
                 raise NotImplementedError
             elif is_continue == 'y':
-                self.trj_name = input('Enter Trial Name: ')
+                self.trj_name = input('[User Attention!] Enter Trial Name: ')
                 break
             else:
                 print('Invalid input')
                 continue
         
-        final_state = input('Please reset the final state, please enter any key to conitnue')
+        self.setup()
         
-        self.publish_reset()
+        
     
     def stop_video(self):
         if self.video_process is not None:

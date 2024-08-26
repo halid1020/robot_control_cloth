@@ -21,7 +21,7 @@ class ActiveGripperControl(Node):
         self.req.state = 0.0           # Set the desired state (on/off)
         self.future = self.cli.call_async(self.req)
         rclpy.spin_until_future_complete(self, self.future)
-        time.sleep(1)
+        time.sleep(0.5)
     
     def grasp(self):
         self.req.fun = 1  # Use the constant for setting digital output
@@ -29,7 +29,7 @@ class ActiveGripperControl(Node):
         self.req.state = 1.0           # Set the desired state (on/off)
         self.future = self.cli.call_async(self.req)
         rclpy.spin_until_future_complete(self, self.future)
-        time.sleep(1)
+        time.sleep(0.5)
 
 def main():
     #print('pin id', SetIO.PIN_TOOL_DOUT1 )

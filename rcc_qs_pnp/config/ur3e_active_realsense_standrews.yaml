@@ -44,7 +44,7 @@ work_r: 0.24
 robot_gripper: "active_parallel_gripper"
 
 # CAUTION!!! following value needs to be calibrated
-g2e_offset: 0.162
+g2e_offset: 0.16
 
 ###################
 ## Camera Config ##
@@ -60,7 +60,9 @@ camera_orien: [180.0, 0.000000, 89.500000] # Euler system in degree.
 
 load_intrinsic: "from_camera"
 
-
+crop_resol: 370
+crop_start_x: 460
+crop_start_y: 220
 
 ####################
 ## MoveIt Setting ##

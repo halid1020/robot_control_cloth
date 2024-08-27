@@ -201,7 +201,7 @@ if __name__ == "__main__":
         initial = 'flatten'
     domain = args.domain
     if args.task == 'all-corner-inward-folding':
-        max_steps = 4
+        max_steps = 6
     elif args.task == 'corners-edge-inward-folding':
         max_steps = 6
     elif args.task == 'diagonal-cross-folding':

@@ -77,7 +77,7 @@ class ControlInterface(Node):
             
             
 
-            print('mask corner value', mask_corner_value)
+            #print('mask corner value', mask_corner_value)
             # Ensure the mask is in the correct format
             segmentation_mask = segmentation_mask.astype(np.uint8) * 255
             
@@ -107,7 +107,7 @@ class ControlInterface(Node):
                 if mask_corner_value >= 2:
                     # if the mask has more than 2 corners, the flip the value
                     final_mask = 1 - final_mask
-                    
+
         # Ensure final_mask is not None before reshaping
         if final_mask is not None:
             final_mask = final_mask.reshape(*mask_shape)
@@ -319,6 +319,8 @@ class ControlInterface(Node):
                 self.demo_states = []
                 init_state = input('[User Attention!] Please set the initial state for setup demonstration, please enter any key when finsihed!')
             else:
+                self.setup_init_state()
+                self.start_video()
                 self.step = 0
                 
         

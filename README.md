@@ -61,7 +61,7 @@ ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168
 3. Right under `<ws_name>`
 ```
 source /opt/ros/humble/setup.bash
-source <path-to-workspace>rcc_build/install/setup.shh
+source ./rcc_build/install/setup.sh
 
 ros2 launch rcc_qs_pnp \
     ur_robot_moveit_executable_launch.py \
@@ -104,7 +104,7 @@ ros2 run rcc_qs_pnp active_gripper_control.py
 4. Test whole system
 ```
 source /opt/ros/humble/setup.bash
-source <path-to-workspace>rcc_build/install/setup.sh
+source ./rcc_build/install/setup.sh
 
 ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:=test_whole_system.py
 ```
@@ -122,7 +122,7 @@ cd <path-to-workspace>
 mkdir agar_build
 cd agar_build
 colcon build --packages-select rcc_msgs --base-paths ../
-source install/setup.bash
+source install/setup.sh
 ```
 
 2. Run `agent-arena` scripts for sending policies to robot
@@ -137,7 +137,7 @@ source <path-to-workspace>/agar_build/install/setup.sh
 a. human_interace
 
 ```
-cd <path-to-workspace>/rcc_qs_pnp/policies
+cd <path-to-workspace>/src/robot_control_cloth/policies/
 python human_interface.py
 ```
 

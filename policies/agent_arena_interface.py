@@ -116,6 +116,10 @@ class AgentArenaInterface(ControlInterface):
 
         return action
     
+    def reset(self):
+        super().reset()
+        self.agent.reset()
+        
     def init(self, state):
         self.agent.init(state)
     
@@ -201,9 +205,9 @@ if __name__ == "__main__":
         initial = 'flatten'
     domain = args.domain
     if args.task == 'all-corner-inward-folding':
-        max_steps = 4
-    elif args.task == 'corners-edge-inward-folding':
         max_steps = 6
+    elif args.task == 'corners-edge-inward-folding':
+        max_steps = 8
     elif args.task == 'diagonal-cross-folding':
         max_steps = 2
     elif args.task == 'double-side-folding':

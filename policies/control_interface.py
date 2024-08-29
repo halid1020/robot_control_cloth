@@ -32,6 +32,10 @@ class ControlInterface(Node):
         self.adjust_orient = adjust_orien
         self.video_device = video_device
         self.video_process = None
+
+        if 'folding' in task:
+            self.collect_demo = False
+            self.demo_states = []
         #self.estimate_pick_depth = estimate_pick_dpeth
 
         print('Finish Init Control Interface')
@@ -65,7 +69,15 @@ class ControlInterface(Node):
         for result in results:
             segmentation_mask = result['segmentation']
             mask_shape = rgb.shape[:2]
+
+            ## count no mask corner of the mask
+            margin = 2
+            mask_corner_value = 1.0*segmentation_mask[margin, margin] + 1.0*segmentation_mask[margin, -margin] + \
+                                1.0*segmentation_mask[-margin, margin] + 1.0*segmentation_mask[-margin, -margin]
             
+            
+
+            #print('mask corner value', mask_corner_value)
             # Ensure the mask is in the correct format
             segmentation_mask = segmentation_mask.astype(np.uint8) * 255
             
@@ -92,6 +104,10 @@ class ControlInterface(Node):
             if color_difference > max_color_difference:
                 final_mask = (segmentation_mask/255).astype(np.bool8)
                 max_color_difference = color_difference
+                if mask_corner_value >= 2:
+                    # if the mask has more than 2 corners, the flip the value
+                    final_mask = 1 - final_mask
+
         # Ensure final_mask is not None before reshaping
         if final_mask is not None:
             final_mask = final_mask.reshape(*mask_shape)
@@ -105,15 +121,13 @@ class ControlInterface(Node):
         self.reset_pub.publish(header)
         print('Published reset!')
 
-
-    def save_step(self, state):
+    def _save_step(self, state, save_dir):
         rgb = state['observation']['rgb']
         raw_rgb = state['observation']['raw_rgb']
         full_mask = state['observation']['full_mask']
         depth = state['observation']['depth']
         mask = state['observation']['mask']
-        #color_depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_AUTUMN)
-        save_dir = os.path.join(self.save_dir, self.trj_name, f'step_{str(self.step)}')
+
         os.makedirs(save_dir, exist_ok=True)
         print('rgb shape', rgb.shape)
         save_color(rgb, filename='rgb', directory=save_dir)
@@ -138,34 +152,73 @@ class ControlInterface(Node):
             with open(f'{save_dir}/evaluation.json', "w") as json_file:
                 json.dump(evaluation, json_file, indent=4)
 
+    def save_step(self, state):
+        
+        #color_depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_AUTUMN)
+        save_dir = os.path.join(self.save_dir, self.trj_name, f'step_{str(self.step)}')
+
+        self._save_step(state, save_dir)
+        
+
     def evaluate(self, state):
-        current_mask = state['observation']['full_mask']
-        cur_mask_pixels = int(np.sum(current_mask))
-        print('current_mask', cur_mask_pixels)
+        if self.task == 'flattening':
+            current_mask = state['observation']['full_mask']
+            cur_mask_pixels = int(np.sum(current_mask))
+            print('current_mask', cur_mask_pixels)
 
-        if self.step == 0:
-            self.init_mask_pixels = cur_mask_pixels
+            if self.step == 0:
+                self.init_mask_pixels = cur_mask_pixels
 
-        res = {
-            'max_coverage': self.max_mask_pixels,
-            'init_coverage': self.init_mask_pixels,
-            'coverage': cur_mask_pixels,
-            'normalised_coverage': 1.0 * cur_mask_pixels/self.max_mask_pixels,
-            'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
-                                              /(self.max_mask_pixels - self.init_mask_pixels), 1), 0),
-            'success': False
-        }
+            res = {
+                'max_coverage': self.max_mask_pixels,
+                'init_coverage': self.init_mask_pixels,
+                'coverage': cur_mask_pixels,
+                'normalised_coverage': 1.0 * cur_mask_pixels/self.max_mask_pixels,
+                'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
+                                                /(self.max_mask_pixels - self.init_mask_pixels), 1), 0),
+                'success': False
+            }
 
-        return res
+            return res
+        elif 'folding' in self.task:
+            return {'success': False}
     
     def setup_evaluation(self, state):
-        current_mask = state['observation']['full_mask']
-        self.max_mask_pixels = int(np.sum(current_mask))
-        print('max_mask', self.max_mask_pixels )
+        if self.task == 'flattening':
+            current_mask = state['observation']['full_mask']
+            self.max_mask_pixels = int(np.sum(current_mask))
+        elif 'folding' in self.task:
+            self.demo_states.append(state)
+        
+            while True:
+                finish_demo = input('[User Attention!] Finish the demonstration? (y/n): ')
+                if finish_demo == 'n':
+                    self.collect_demo = True
+                    break
+                elif finish_demo == 'y':
+                    self.collect_demo = False
+                    break
+                else:
+                    print('[User Attention!] Invalid input')
+                    continue
+
+            if self.collect_demo:
+                demo_step = input('[User Attention!] Make a move manually, and enter any key to continue when finshed!')
+                self.step = -1
+                self.publish_reset()
+                return
+            else:
+                for i, state in enumerate(self.demo_states):
+                    save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_{i}')
+                    self._save_step(state, save_dir)
+        
         self.setup_init_state()
+        self.start_video()
+        self.publish_reset()
 
     def setup_init_state(self):
         is_continue = input('[User Attention!] Please set a random initial state, and enter any keys after setup to continue!')
+        
 
     def clean_up(self, state):
         self.stop_video()
@@ -194,8 +247,7 @@ class ControlInterface(Node):
         if self.step == -1:
             self.step += 1
             self.setup_evaluation(input_state)
-            self.start_video()
-            self.publish_reset()
+            
             return
 
         evaluation = self.evaluate(input_state)
@@ -244,8 +296,34 @@ class ControlInterface(Node):
     def act(self, state):
         pass
 
+
     def setup(self):
-        final_state = input('[User Attention!] Please set to the final state for setup evaluation, please enter any key when finsihed!')
+
+        if self.task == 'flattening':
+            final_state = input('[User Attention!] Please set to the final state for setup evaluation, please enter any key when finsihed!')
+            
+        elif 'folding' in self.task:
+            while True:
+                new_demo = input('[User Attention!] Do you want to start a new demonstration? (y/n): ')
+                if new_demo == 'n':
+                    self.collect_demo = False
+                    break
+                elif new_demo == 'y':
+                    self.collect_demo = True
+                    break
+                else:
+                    print('[User Attention!] Invalid input')
+                    continue
+            
+            if self.collect_demo:
+                self.demo_states = []
+                init_state = input('[User Attention!] Please set the initial state for setup demonstration, please enter any key when finsihed!')
+            else:
+                self.setup_init_state()
+                self.start_video()
+                self.step = 0
+                
+        
         self.publish_reset()
 
     def reset(self):

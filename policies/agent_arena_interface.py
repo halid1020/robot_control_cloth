@@ -30,9 +30,9 @@ class AgentArenaInterface(ControlInterface):
     def __init__(self, agent, task, config_name, 
                  checkpoint,
                  steps=20, 
-                 adjust_pick=False, adjust_orien=False):
+                 adjust_pick=False, adjust_orien=False, save_dir='.'):
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
-                         name='agent', adjust_orien=adjust_orien)
+                         name='agent', adjust_orien=adjust_orien, save_dir=save_dir)
 
         self.agent = agent
         # print('Max steps {}'.format(steps))
@@ -48,8 +48,8 @@ class AgentArenaInterface(ControlInterface):
         # self.mask_generator = get_mask_generator()
         
        
-        self.save_dir = './agent_data/{}-{}-{}-{}'.\
-            format(task, agent.name, config_name, checkpoint)
+        self.save_dir = '{}/agent_data/{}-{}-{}-{}'.\
+            format(self.save_dir, task, agent.name, config_name, checkpoint)
 
         os.makedirs(self.save_dir, exist_ok=True)
         # self.step = -1
@@ -132,7 +132,7 @@ class AgentArenaInterface(ControlInterface):
     def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
         rgb = cv2.resize(rgb, self.resolution)
         depth = cv2.resize(depth, self.resolution) 
-        mask = self.get_mask(rgb)  
+        mask = get_mask(self.mask_generator, rgb)  
 
         rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
@@ -165,7 +165,7 @@ class AgentArenaInterface(ControlInterface):
 
         if raw_rgb is not None:
             raw_rgb = raw_rgb[40:-40, 40:-40]
-            full_mask = self.get_mask(raw_rgb)
+            full_mask = get_mask(self.mask_generator, raw_rgb)
             state['observation']['full_mask'] = full_mask
             raw_rgb =  cv2.cvtColor(raw_rgb, cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb
@@ -181,7 +181,8 @@ def parse_arguments():
     parser.add_argument('--domain', default='sim2real-rect-fabric')
     parser.add_argument('--agent', default='transporter')
     parser.add_argument('--config', default='MJ-TN-2000-rgb-maskout-rotation-90')
-    parser.add_argument('--log_dir', default='/home/ah390/Data')
+    parser.add_argument('--log_dir', default='/data/models')
+    parser.add_argument('--save_dir', default='/data/sim2real')
     #parser.add_argument('--store_interm', action='store_true', help='store intermediate results')
     parser.add_argument('--eval_checkpoint', default=-1, type=int)
 
@@ -209,7 +210,7 @@ if __name__ == "__main__":
     elif args.task == 'corners-edge-inward-folding':
         max_steps = 8
     elif args.task == 'diagonal-cross-folding':
-        max_steps = 2
+        max_steps = 4
     elif args.task == 'double-side-folding':
         max_steps = 8
     elif args.task == 'rectangular-folding':
@@ -245,7 +246,7 @@ if __name__ == "__main__":
         sim2real = AgentArenaInterface(
             agent, args.task, args.config, 
             checkpoint, max_steps, 
-            adjust_orien=adjust_orien, adjust_pick=adjust_pick)
+            adjust_orien=adjust_orien, adjust_pick=adjust_pick, save_dir=args.save_dir)
         
         sim2real.run()
     except Exception as e:

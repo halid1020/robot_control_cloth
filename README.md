@@ -89,7 +89,7 @@ ros2 launch rcc_qs_pnp \
 1. Test ur3e robot with moveit
 ```
 source /opt/ros/humble/setup.bash
-source <path-to-workspace>rcc_build/install/setup.sh
+source <path-to-workspace>/rcc_build/install/setup.sh
 
 ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:ur3e_robot_moveit.py
 ```

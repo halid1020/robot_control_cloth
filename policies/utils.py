@@ -27,6 +27,85 @@ import shlex
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
 
+def get_mask(mask_generator, rgb):
+        """
+        Generate a mask for the given RGB image that is most different from the background.
+        
+        Parameters:
+        - rgb: A NumPy array representing the RGB image.
+        
+        Returns:
+        - A binary mask as a NumPy array with the same height and width as the input image.
+        """
+        # Generate potential masks from the mask generator
+        results = mask_generator.generate(rgb)
+        
+        final_mask = None
+        max_color_difference = 0
+        print('Processing mask results...')
+        save_color(rgb, 'rgb')
+        mask_data = []
+
+        # Iterate over each generated mask result
+        for i, result in enumerate(results):
+            segmentation_mask = result['segmentation']
+            mask_shape = rgb.shape[:2]
+
+            ## count no mask corner of the mask
+            margin = 2
+            mask_corner_value = 1.0*segmentation_mask[margin, margin] + 1.0*segmentation_mask[margin, -margin] + \
+                                1.0*segmentation_mask[-margin, margin] + 1.0*segmentation_mask[-margin, -margin]
+            
+            
+
+            #print('mask corner value', mask_corner_value)
+            # Ensure the mask is in the correct format
+            orginal_mask = segmentation_mask.copy()
+            segmentation_mask = segmentation_mask.astype(np.uint8) * 255
+            
+            # Calculate the masked region and the background region
+            masked_region = cv2.bitwise_and(rgb, rgb, mask=segmentation_mask)
+            background_region = cv2.bitwise_and(rgb, rgb, mask=cv2.bitwise_not(segmentation_mask))
+            
+            # Calculate the average color of the masked region
+            masked_pixels = masked_region[segmentation_mask == 255]
+            if masked_pixels.size == 0:
+                continue
+            avg_masked_color = np.mean(masked_pixels, axis=0)
+            
+            # Calculate the average color of the background region
+            background_pixels = background_region[segmentation_mask == 0]
+            if background_pixels.size == 0:
+                continue
+            avg_background_color = np.mean(background_pixels, axis=0)
+            
+            # Calculate the Euclidean distance between the average colors
+            color_difference = np.linalg.norm(avg_masked_color - avg_background_color)
+            #print(f'color difference {i} color_difference {color_difference}')
+            #save_mask(orginal_mask, f'mask_candidate_{i}')
+            
+            # Select the mask with the maximum color difference from the background
+            mask_region_size = np.sum(segmentation_mask == 255)
+
+            if mask_corner_value >= 2:
+                # if the mask has more than 2 corners, the flip the value
+                orginal_mask = 1 - orginal_mask
+
+            mask_data.append({
+                'mask': orginal_mask,
+                'color_difference': color_difference,
+                'mask_region_size': mask_region_size,
+            })
+        
+        top_5_masks = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[:5]
+        final_mask_data = max(top_5_masks, key=lambda x: x['mask_region_size'])
+        final_mask = final_mask_data['mask']
+        
+        #save_mask(final_mask, 'final_mask')
+        print('Final mask generated.')
+
+        return final_mask
+
 def start_ffmpeg_recording(output_file, device='/dev/video6', resolution='1920x1080', framerate=30):
     """
     Start FFmpeg recording in the background.

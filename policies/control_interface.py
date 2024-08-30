@@ -15,7 +15,7 @@ from utils import *
 
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',
-                 adjust_pick=False, adjust_orien=False, video_device='/dev/video6'):
+                 adjust_pick=False, adjust_orien=False, video_device='/dev/video6', save_dir='.'):
         super().__init__(f"{name}_interface")
         self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
         self.pnp_pub = self.create_publisher(NormPixelPnP, '/norm_pixel_pnp', 10)
@@ -24,6 +24,7 @@ class ControlInterface(Node):
         self.fix_steps = steps
         self.mask_generator = get_mask_generator()
         self.task = task
+        self.save_dir = save_dir
       
         self.step = -1
         self.last_action = None
@@ -49,71 +50,6 @@ class ControlInterface(Node):
         pnp_msg.degree = pnp['orientation']
         self.pnp_pub.publish(pnp_msg)
 
-    def get_mask(self, rgb):
-        """
-        Generate a mask for the given RGB image that is most different from the background.
-        
-        Parameters:
-        - rgb: A NumPy array representing the RGB image.
-        
-        Returns:
-        - A binary mask as a NumPy array with the same height and width as the input image.
-        """
-        # Generate potential masks from the mask generator
-        results = self.mask_generator.generate(rgb)
-        
-        final_mask = None
-        max_color_difference = 0
-
-        # Iterate over each generated mask result
-        for result in results:
-            segmentation_mask = result['segmentation']
-            mask_shape = rgb.shape[:2]
-
-            ## count no mask corner of the mask
-            margin = 2
-            mask_corner_value = 1.0*segmentation_mask[margin, margin] + 1.0*segmentation_mask[margin, -margin] + \
-                                1.0*segmentation_mask[-margin, margin] + 1.0*segmentation_mask[-margin, -margin]
-            
-            
-
-            #print('mask corner value', mask_corner_value)
-            # Ensure the mask is in the correct format
-            segmentation_mask = segmentation_mask.astype(np.uint8) * 255
-            
-            # Calculate the masked region and the background region
-            masked_region = cv2.bitwise_and(rgb, rgb, mask=segmentation_mask)
-            background_region = cv2.bitwise_and(rgb, rgb, mask=cv2.bitwise_not(segmentation_mask))
-            
-            # Calculate the average color of the masked region
-            masked_pixels = masked_region[segmentation_mask == 255]
-            if masked_pixels.size == 0:
-                continue
-            avg_masked_color = np.mean(masked_pixels, axis=0)
-            
-            # Calculate the average color of the background region
-            background_pixels = background_region[segmentation_mask == 0]
-            if background_pixels.size == 0:
-                continue
-            avg_background_color = np.mean(background_pixels, axis=0)
-            
-            # Calculate the Euclidean distance between the average colors
-            color_difference = np.linalg.norm(avg_masked_color - avg_background_color)
-            
-            # Select the mask with the maximum color difference from the background
-            if color_difference > max_color_difference:
-                final_mask = (segmentation_mask/255).astype(np.bool8)
-                max_color_difference = color_difference
-                if mask_corner_value >= 2:
-                    # if the mask has more than 2 corners, the flip the value
-                    final_mask = 1 - final_mask
-
-        # Ensure final_mask is not None before reshaping
-        if final_mask is not None:
-            final_mask = final_mask.reshape(*mask_shape)
-            #final_mask = filter_small_masks(final_mask, 100)
-
-        return final_mask
 
     def publish_reset(self):
         header = Header()

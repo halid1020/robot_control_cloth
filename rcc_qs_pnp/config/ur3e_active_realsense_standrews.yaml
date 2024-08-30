@@ -44,7 +44,7 @@ work_r: 0.24
 robot_gripper: "active_parallel_gripper"
 
 # CAUTION!!! following value needs to be calibrated
-g2e_offset: 0.17
+g2e_offset: 0.168
 
 ###################
 ## Camera Config ##
@@ -64,15 +64,15 @@ crop_resol: 370
 crop_start_x: 460
 crop_start_y: 220
 
-####################
-## MoveIt Setting ##
-####################
+# ####################
+# ## MoveIt Setting ##
+# ####################
 
-ros_sleep_time: 0.2
-max_vel_scale: 0.3
-max_acc_scale: 0.1
-plan_pipe_id: 'pilz_industrial_motion_planner'
-planner_id: 'PTP'
+# ros_sleep_time: 0.2
+# max_vel_scale: 0.3
+# max_acc_scale: 0.1
+# plan_pipe_id: 'pilz_industrial_motion_planner'
+# planner_id: 'PTP'
 
 ############################
 ## Pick and Place Setting ##

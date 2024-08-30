@@ -119,7 +119,7 @@ class AgentArenaInterface(ControlInterface):
     def reset(self):
         super().reset()
         self.agent.reset()
-        
+    
     def init(self, state):
         self.agent.init(state)
     
@@ -229,9 +229,10 @@ if __name__ == "__main__":
         config=agent_config)
 
     if args.eval_checkpoint == -1:
-        agent.load()
+        checkpoint = agent.load()
     else:
         agent.load_checkpoint(int(args.eval_checkpoint))
+        checkpoint = args.eval_checkpoint
     print('Finsh Initialising Agent ...')
 
     try:
@@ -243,7 +244,7 @@ if __name__ == "__main__":
         ### Run Sim2Real ###
         sim2real = AgentArenaInterface(
             agent, args.task, args.config, 
-            args.eval_checkpoint, max_steps, 
+            checkpoint, max_steps, 
             adjust_orien=adjust_orien, adjust_pick=adjust_pick)
         
         sim2real.run()

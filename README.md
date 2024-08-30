@@ -44,6 +44,7 @@ git clone <this repo>
 ```
 source /opt/ros/humble/setup.bash
 mkdir rcc_build
+cd rcc_build
 colcon build --base-paths ../
 ```
 

@@ -23,11 +23,66 @@ from agent_arena.utilities.visualisation_utils import draw_pick_and_place, filte
 
 import subprocess
 import shlex
+from scipy.ndimage import rotate, shift
+from skimage.measure import label, regionprops
 
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
 
-def get_mask(mask_generator, rgb):
+def get_IoU(mask1, mask2):
+    """
+    Calculate the maximum IoU between two binary mask images,
+    allowing for rotation and translation of mask1.
+    
+    :param mask1: First binary mask (numpy array)
+    :param mask2: Second binary mask (numpy array)
+    :return: Tuple of (Maximum IoU value, Matched mask)
+    """
+    
+    def calculate_iou(mask1, mask2):
+        intersection = np.logical_and(mask1, mask2).sum()
+        union = np.logical_or(mask1, mask2).sum()
+        return intersection / union if union > 0 else 0
+
+    # Get the properties of mask2
+    props = regionprops(label(mask2))[0]
+    center_y, center_x = props.centroid
+
+    max_iou = 0
+    best_mask = None
+    
+    # Define rotation angles to try
+    angles = range(0, 360, 10)  # Rotate from 0 to 350 degrees in 10-degree steps
+    
+    for angle in angles:
+        # Rotate mask1
+        rotated_mask = rotate(mask1, angle, reshape=False)
+        
+        # Get properties of rotated mask
+        rotated_props = regionprops(label(rotated_mask))[0]
+        rotated_center_y, rotated_center_x = rotated_props.centroid
+        
+        # Calculate translation
+        dy = center_y - rotated_center_y
+        dx = center_x - rotated_center_x
+        
+        # Translate rotated mask
+        translated_mask = shift(rotated_mask, (dy, dx))
+        
+        # Calculate IoU
+        iou = calculate_iou(translated_mask, mask2)
+        
+        # Update max_iou and best_mask if necessary
+        if iou > max_iou:
+            max_iou = iou
+            best_mask = translated_mask
+
+    # Ensure the best_mask is binary
+    best_mask = (best_mask > 0.5).astype(int)
+
+    return max_iou, best_mask
+
+def get_mask_v2(mask_generator, rgb):
         """
         Generate a mask for the given RGB image that is most different from the background.
         
@@ -52,7 +107,7 @@ def get_mask(mask_generator, rgb):
             mask_shape = rgb.shape[:2]
 
             ## count no mask corner of the mask
-            margin = 2
+            margin = 5
             mask_corner_value = 1.0*segmentation_mask[margin, margin] + 1.0*segmentation_mask[margin, -margin] + \
                                 1.0*segmentation_mask[-margin, margin] + 1.0*segmentation_mask[-margin, -margin]
             
@@ -98,7 +153,7 @@ def get_mask(mask_generator, rgb):
             })
         
         top_5_masks = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[:5]
-        final_mask_data = max(top_5_masks, key=lambda x: x['mask_region_size'])
+        final_mask_data = sorted(top_5_masks, key=lambda x: x['mask_region_size'], reverse=True)[0]
         final_mask = final_mask_data['mask']
         
         #save_mask(final_mask, 'final_mask')

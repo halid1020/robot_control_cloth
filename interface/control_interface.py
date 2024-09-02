@@ -48,6 +48,10 @@ class ControlInterface(Node):
         pnp_msg.header.stamp = self.get_clock().now().to_msg()
         pnp_msg.data = (data[0], data[1], data[2], data[3])
         pnp_msg.degree = pnp['orientation']
+        pnp_msg.place_height = 0.03
+        if 'folding' in self.task:
+            pnp_msg.place_height = 0.02
+
         self.pnp_pub.publish(pnp_msg)
 
 
@@ -112,17 +116,26 @@ class ControlInterface(Node):
                 'normalised_coverage': 1.0 * cur_mask_pixels/self.max_mask_pixels,
                 'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
                                                 /(self.max_mask_pixels - self.init_mask_pixels), 1), 0),
-                'success': False
+                'auto success': bool(1.0 * cur_mask_pixels/self.max_mask_pixels > 0.95),
+                'human success': False
             }
 
             return res
         elif 'folding' in self.task:
-            return {'success': False}
+            IoU, matched_mask = get_IoU(state['observation']['mask'], self.goal_mask)
+            save_mask(matched_mask, filename='matched_mask', directory='tmp')
+            return {
+                'human success': False, 
+                'auto success': bool(IoU > 0.9),
+                'IoU': IoU}
     
     def setup_evaluation(self, state):
         if self.task == 'flattening':
-            current_mask = state['observation']['full_mask']
+            current_mask = state['observation']['mask']
             self.max_mask_pixels = int(np.sum(current_mask))
+            save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_0')
+            self._save_step(state, save_dir)
+            
         elif 'folding' in self.task:
             self.demo_states.append(state)
         
@@ -147,6 +160,8 @@ class ControlInterface(Node):
                 for i, state in enumerate(self.demo_states):
                     save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_{i}')
                     self._save_step(state, save_dir)
+                
+                self.goal_mask = self.demo_states[-1]['observation']['mask']
         
         self.setup_init_state()
         self.start_video()
@@ -162,10 +177,10 @@ class ControlInterface(Node):
         while True:
             is_success = input('[User Attention!] Is the task successful? (y/n): ')
             if is_success == 'y':
-                state['evaluation']['success'] = True
+                state['evaluation']['human success'] = True
                 break
             elif is_success == 'n':
-                state['evaluation']['success'] = False
+                state['evaluation']['human success'] = False
                 break
             else:
                 print('[User Attention!] Invalid input')
@@ -178,6 +193,7 @@ class ControlInterface(Node):
         crop_rgb = imgmsg_to_cv2_custom(data.crop_rgb, "bgr8")
         crop_depth = imgmsg_to_cv2_custom(data.crop_depth, "64FC1")
         raw_rgb = imgmsg_to_cv2_custom(data.raw_rgb, "bgr8")
+        self.real_camera_height = data.camera_height
         input_state = self.post_process(crop_rgb, crop_depth, raw_rgb)
 
         if self.step == -1:

@@ -30,7 +30,12 @@ class AgentArenaInterface(ControlInterface):
     def __init__(self, agent, task, config_name, 
                  checkpoint,
                  steps=20, 
-                 adjust_pick=False, adjust_orien=False, save_dir='.'):
+                 adjust_pick=False, 
+                 adjust_orien=False,
+                 depth_sim2real='v2',
+                 mask_sim2real='v2',
+                 sim_camera_height=0.65,
+                 save_dir='.'):
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
                          name='agent', adjust_orien=adjust_orien, save_dir=save_dir)
 
@@ -58,6 +63,9 @@ class AgentArenaInterface(ControlInterface):
         # self.adjust_pick = adjust_pick
         # self.adjust_orient = adjust_orien
 
+        self.depth_sim2real = depth_sim2real
+        self.mask_sim2real = mask_sim2real
+        self.sim_camera_height = sim_camera_height
 
         print('Finish Init Agent')
 
@@ -131,8 +139,9 @@ class AgentArenaInterface(ControlInterface):
 
     def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
         rgb = cv2.resize(rgb, self.resolution)
-        depth = cv2.resize(depth, self.resolution) 
-        mask = get_mask(self.mask_generator, rgb)  
+        depth = cv2.resize(depth, self.resolution)
+        if self.mask_sim2real == 'v2':
+            mask = get_mask_v2(self.mask_generator, rgb)
 
         rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
@@ -140,10 +149,14 @@ class AgentArenaInterface(ControlInterface):
         ### background are 1s.
         ### the agent needs to do the adjustment according! 
         
-        norm_depth = (depth - np.min(depth))/((np.max(depth)) - np.min(depth))
-        masked_depth = norm_depth * mask
-        new_depth = np.ones_like(masked_depth)
-        new_depth = new_depth * (1 - mask) + masked_depth
+        if self.depth_sim2real in ['v1', 'v2']:
+            norm_depth = (depth - np.min(depth))/((np.max(depth)) - np.min(depth))
+            masked_depth = norm_depth * mask
+            new_depth = np.ones_like(masked_depth)
+            depth = new_depth * (1 - mask) + masked_depth
+        
+        elif self.depth_sim2real == 'v0':
+            depth += (self.sim_camera_height - self.real_camera_height)
 
         
         # save_depth(new_depth, filename='post_depth.png', directory="./tmp")
@@ -153,21 +166,22 @@ class AgentArenaInterface(ControlInterface):
         state = {
             'observation': {
                 'rgb': rgb.copy(),
-                'depth': new_depth.copy(),
+                'depth': depth.copy(),
                 'mask': mask.copy()
             },
             'action_space': Box(
                 -np.ones((1, 4)).astype(np.float32),
                 np.ones((1, 4)).astype(np.float32),
                 dtype=np.float32),
-            'sim2real': True
+            'sim2real': True,
+            'task': self.task
         }
 
         if raw_rgb is not None:
-            raw_rgb = raw_rgb[40:-40, 40:-40]
-            full_mask = get_mask(self.mask_generator, raw_rgb)
+            raw_rgb = raw_rgb[100:-100, 150:-150]
+            full_mask = get_mask_v2(self.mask_generator, raw_rgb)[10:-10, 10:-10]
             state['observation']['full_mask'] = full_mask
-            raw_rgb =  cv2.cvtColor(raw_rgb, cv2.COLOR_BGR2RGB)
+            raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb
 
 
@@ -185,6 +199,17 @@ def parse_arguments():
     parser.add_argument('--save_dir', default='/data/sim2real')
     #parser.add_argument('--store_interm', action='store_true', help='store intermediate results')
     parser.add_argument('--eval_checkpoint', default=-1, type=int)
+
+    ## Sim2Real Protocol
+    parser.add_argument('--depth_sim2real', default='v2')
+    parser.add_argument('--mask_sim2real', default='v2')
+    parser.add_argument('--sim_camera_height', default=0.65, type=float)
+
+    ## Grasping Protocol
+    parser.add_argument('--adjust_pick', action='store_true')
+    parser.add_argument('--adjust_orien', action='store_true')
+
+
 
 
     return parser.parse_args()
@@ -238,15 +263,17 @@ if __name__ == "__main__":
 
     try:
         rclpy.init()
-
-        adjust_pick=True
-        adjust_orien=True
-
+        
         ### Run Sim2Real ###
         sim2real = AgentArenaInterface(
             agent, args.task, args.config, 
             checkpoint, max_steps, 
-            adjust_orien=adjust_orien, adjust_pick=adjust_pick, save_dir=args.save_dir)
+            adjust_orien=args.adjust_orien, 
+            adjust_pick=args.adjust_pick, 
+            save_dir=args.save_dir,
+            depth_sim2real=args.depth_sim2real,
+            mask_sim2real=args.mask_sim2real,
+            sim_camera_height=args.sim_camera_height)
         
         sim2real.run()
     except Exception as e:

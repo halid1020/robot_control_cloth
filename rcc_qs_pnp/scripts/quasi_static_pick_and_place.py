@@ -73,7 +73,9 @@ class QuasiStaticPickAndPlace(Node):
         print("Received pnp: %s", pnp.data)
         
         orien_degree = pnp.degree
+        self.place_raise_offset = pnp.place_height
         pnp = np.asarray(pnp.data)
+       
 
 
         ### Post Process, Convert form pixel space to base space
@@ -377,6 +379,7 @@ class QuasiStaticPickAndPlace(Node):
 
         obs_msg.raw_rgb = raw_rgb_msg
         obs_msg.raw_depth = raw_depth_msg
+        obs_msg.camera_height = self.camera_height
         
 
         # Publish the message

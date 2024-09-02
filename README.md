@@ -138,7 +138,7 @@ source <path-to-workspace>/agar_build/install/setup.sh
 a. human_interace
 
 ```
-cd <path-to-workspace>/src/robot_control_cloth/policies/
+cd <path-to-workspace>/src/robot_control_cloth/interface/
 python human_interface.py
 ```
 
@@ -152,4 +152,11 @@ ffmpeg -f v4l2 -video_size 1920x1080 -framerate 30 -i /dev/video6 -c:v libx264 -
 Video Recoding Stop
 ```
 pkill -SIGINT ffmpeg
+```
+
+
+## V. Run foldsformer
+
+```
+python agent_arena_interface.py --agent foldsformer --domain ffmr-square-fabric --adjust_pick --adjust_orien --depth_sim2real v0 --mask_sim2real v2 --task all-corner-inward-folding --config default
 ```

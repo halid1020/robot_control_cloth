@@ -44,7 +44,7 @@ work_r: 0.24
 robot_gripper: "active_parallel_gripper"
 
 # CAUTION!!! following value needs to be calibrated
-g2e_offset: 0.168
+g2e_offset: 0.202 #0.168
 
 ###################
 ## Camera Config ##
@@ -78,6 +78,6 @@ crop_start_y: 220
 ## Pick and Place Setting ##
 ############################
 
-pick_raise_offset: 0.05
+pick_raise_offset: 0.04 
 place_raise_offset: 0.03
 crop_scale: 0.5

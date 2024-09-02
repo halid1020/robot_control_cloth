@@ -157,6 +157,9 @@ class AgentArenaInterface(ControlInterface):
         
         elif self.depth_sim2real == 'v0':
             depth += (self.sim_camera_height - self.real_camera_height)
+            masked_depth = depth * mask
+            new_depth = np.ones_like(masked_depth) * self.sim_camera_height
+            depth = new_depth * (1 - mask) + masked_depth
 
         
         # save_depth(new_depth, filename='post_depth.png', directory="./tmp")

@@ -288,8 +288,8 @@ class QuasiStaticPickAndPlace(Node):
 
         # Open Gripper
         self.gripper.open()
-        self.gripper.grasp()
-        self.gripper.open()
+        # self.gripper.grasp()
+        # self.gripper.open()
 
     def _crop_image(self, image, annotation=False):
         org_image = image.copy()

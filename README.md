@@ -160,3 +160,15 @@ pkill -SIGINT ffmpeg
 ```
 python agent_arena_interface.py --agent foldsformer --domain ffmr-square-fabric --adjust_pick --adjust_orien --depth_sim2real v0 --mask_sim2real v2 --task all-corner-inward-folding --config default
 ```
+
+## VI. Run MJ-TN
+```
+python agent_arena_interface.py --agent transporter --domain sim2real-square-fabric --adjust_pick --adjust_orien --depth_sim2real v2 --mask_sim2real v2 --task all-corner-inward-folding --config MJ-TN-1000-rgb-maskout-rotation-90
+
+```
+
+## VI. Run Diffusion
+```
+python agent_arena_interface.py --agent diffusion_policy --domain sim2real-rect-fabric --adjust_pick --adjust_orien --depth_sim2real v2 --mask_sim2real v2 --task flattening --config masked-rgb
+
+```

@@ -67,6 +67,7 @@ class ControlInterface(Node):
         full_mask = state['observation']['full_mask']
         depth = state['observation']['depth']
         mask = state['observation']['mask']
+        
 
         os.makedirs(save_dir, exist_ok=True)
         print('rgb shape', rgb.shape)
@@ -76,6 +77,20 @@ class ControlInterface(Node):
         save_depth(depth, filename='colour_depth', directory=save_dir, colour=True)
         save_mask(mask, filename='mask', directory=save_dir)
         save_mask(full_mask, filename='full_mask', directory=save_dir)
+
+        if 'input_obs' in state:
+            input_obs = state['input_obs']
+            input_type = state['input_type']
+            print('input_obs', input_obs.shape)
+            if input_type == 'rgb':
+                save_color(input_obs, filename='input_obs_rgb', directory=save_dir)
+            elif input_type == 'depth':
+                save_depth(input_obs, filename='input_obs_depth', directory=save_dir)
+                save_depth(input_obs, filename='input_obs_colour_depth', directory=save_dir, colour=True)
+            elif input_type == 'rgbd':
+                save_color(input_obs[:, :, :3], filename='input_obs_rgb', directory=save_dir)
+                save_depth(input_obs[:, :, 3], filename='input_obs_depth', directory=save_dir)
+                save_depth(input_obs[:, :, 3], filename='input_obs_colour_depth', directory=save_dir, colour=True)
 
         if 'action' in state:
             action = state['action']
@@ -113,7 +128,7 @@ class ControlInterface(Node):
                 'max_coverage': self.max_mask_pixels,
                 'init_coverage': self.init_mask_pixels,
                 'coverage': cur_mask_pixels,
-                'normalised_coverage': 1.0 * cur_mask_pixels/self.max_mask_pixels,
+                'normalised_coverage': max(min(1.0, 1.0 * cur_mask_pixels/self.max_mask_pixels), 0),
                 'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
                                                 /(self.max_mask_pixels - self.init_mask_pixels), 1), 0),
                 'auto success': bool(1.0 * cur_mask_pixels/self.max_mask_pixels > 0.95),
@@ -131,7 +146,7 @@ class ControlInterface(Node):
     
     def setup_evaluation(self, state):
         if self.task == 'flattening':
-            current_mask = state['observation']['mask']
+            current_mask = state['observation']['full_mask']
             self.max_mask_pixels = int(np.sum(current_mask))
             save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_0')
             self._save_step(state, save_dir)

@@ -78,6 +78,6 @@ crop_start_y: 220
 ## Pick and Place Setting ##
 ############################
 
-pick_raise_offset: 0.04 
+pick_raise_offset: 0.03 
 place_raise_offset: 0.03
 crop_scale: 0.5

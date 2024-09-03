@@ -141,10 +141,14 @@ def get_mask_v2(mask_generator, rgb):
             
             # Select the mask with the maximum color difference from the background
             mask_region_size = np.sum(segmentation_mask == 255)
+            
 
             if mask_corner_value >= 2:
                 # if the mask has more than 2 corners, the flip the value
                 orginal_mask = 1 - orginal_mask
+
+            if mask_region_size > 160000:
+                continue
 
             mask_data.append({
                 'mask': orginal_mask,

@@ -1,38 +1,44 @@
 #!/usr/bin/env python3
-## robot driver and realsense are launch
+## robot driver and realsense are launched
 
-import rclpy
-
+import rospy
 from active_gripper_control import ActiveGripperControl
 from camera_image_retriever import CameraImageRetriever
-from ur3e_robot_moveit import UR3eRobotMoveit
-
+from panda_robot_moveit import PandaRobotMoveit
 
 def main():
-    #print('pin id', SetIO.PIN_TOOL_DOUT1 )
-    rclpy.init()
+    rospy.init_node('panda_robot_control', anonymous=True)
+    
+    # Initialize Gripper, Camera, and Robot MoveIt controller
     gripper_control = ActiveGripperControl()
-    camera_retriver = CameraImageRetriever()
-    ur3e_robot = UR3eRobotMoveit()
+    camera_retriever = CameraImageRetriever(camera_height=0.5)  # Adjust camera height accordingly
+    panda_robot = PandaRobotMoveit()
 
+    # Open and grasp using the gripper
     gripper_control.open()
     gripper_control.grasp()
-    ur3e_robot.go_pose(name='home')
-    ur3e_robot.go_pose(name='up')
+    
+    # Move the robot to home and up positions
+    panda_robot.go_pose(name='home')
+    panda_robot.go_pose(name='up')
     
     try:
-        while rclpy.ok():
+        while not rospy.is_shutdown():
             for i in range(3):
-                camera_retriver.get_images()
+                # Capture images from the camera
+                camera_retriever.take_rgbd()
+                
+                # Simulate basic gripper operation and robot movement
                 gripper_control.open()
                 gripper_control.grasp()
-                ur3e_robot.go_pose(name='home')
-                ur3e_robot.go_pose(name='up')
-            break
+                
+                panda_robot.go_pose(name='home')
+                panda_robot.go_pose(name='up')
+            break  # Stop the loop after 3 iterations
     finally:
-        camera_retriver.destroy_node()
+        camera_retriever.destroy_node()
         gripper_control.destroy_node()
-        rclpy.shutdown()
-        
+        rospy.signal_shutdown('Completed robot operations')
+
 if __name__ == '__main__':
     main()

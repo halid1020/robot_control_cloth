@@ -1,0 +1,48 @@
+<launch>
+  <!-- Load parameters for MoveIt -->
+  <arg name="robot_ip" default="192.168.1.1" />
+  <arg name="moveit_config_package" default="franka_moveit_config" />
+  <arg name="moveit_config_file" default="panda.srdf.xacro" />
+  <arg name="moveit_joint_limits_file" default="joint_limits.yaml" />
+  <arg name="warehouse_sqlite_path" default="$(env HOME)/.ros/warehouse_ros.sqlite" />
+  <arg name="use_sim_time" default="false" />
+  <arg name="launch_rviz" default="true" />
+  <arg name="use_fake_hardware" default="false" />
+
+  <!-- Robot Description -->
+  <param name="robot_description" command="$(find xacro)/xacro '$(find franka_description)/robots/panda_arm.urdf.xacro' robot_ip:=$(arg robot_ip)" />
+
+  <!-- Robot Description Semantic -->
+  <param name="robot_description_semantic" command="$(find xacro)/xacro '$(find $(arg moveit_config_package))/srdf/$(arg moveit_config_file)'"/>
+
+  <!-- Kinematics Config -->
+  <param name="robot_description_kinematics" textfile="$(find $(arg moveit_config_package))/config/kinematics.yaml" />
+
+  <!-- Planning Config -->
+  <param name="robot_description_planning" textfile="$(find $(arg moveit_config_package))/config/$(arg moveit_joint_limits_file)" />
+
+  <!-- Controllers -->
+  <rosparam file="$(find $(arg moveit_config_package))/config/controllers.yaml" command="load" />
+
+  <!-- Start MoveIt! -->
+  <node name="move_group" pkg="moveit_ros_move_group" type="move_group" output="screen" />
+
+  <!-- Start RViz -->
+  <arg name="rviz_config_file" default="$(find $(arg moveit_config_package))/launch/moveit.rviz" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rviz_config_file)" if="$(arg launch_rviz)" />
+
+  <!-- Start the Trajectory Execution Node -->
+  <include file="$(find $(arg moveit_config_package))/launch/moveit_controller_manager.launch" />
+
+  <!-- Start the franka_control node -->
+  <include file="$(find franka_control)/launch/franka_control.launch">
+    <arg name="robot_ip" value="$(arg robot_ip)" />
+    <arg name="robot_state_publisher" value="true" />
+    <arg name="use_sim_time" value="$(arg use_sim_time)" />
+  </include>
+
+  <!-- Start franka_gripper node -->
+  <node pkg="franka_gripper" type="franka_gripper" name="franka_gripper" output="screen">
+    <param name="robot_ip" value="$(arg robot_ip)" />
+  </node>
+</launch>

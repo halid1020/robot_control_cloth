@@ -4,6 +4,9 @@ import os
 import numpy as np
 import cv2
 import torch
+from segment_anything import sam_model_registry
+from segment_anything import \
+     sam_model_registry, SamAutomaticMaskGenerator
 from gym.spaces import Box
 import traceback
 import rospy
@@ -22,7 +25,7 @@ class AgentArenaInterface(ControlInterface):
                  depth_sim2real='v2', mask_sim2real='v2',
                  sim_camera_height=0.65, save_dir='.'):
         super(AgentArenaInterface, self).__init__(task, steps=steps, adjust_pick=adjust_pick,
-                                                  name='agent', adjust_orien=adjust_orien)
+                                                  name='agent', adjust_orien=adjust_orien,save_dir=save_dir)
         self.agent = agent
         self.save_dir = './agent_data/{}-{}-{}-{}'.format(task, agent.name, config_name, checkpoint)
         os.makedirs(self.save_dir, exist_ok=True)
@@ -94,12 +97,18 @@ class AgentArenaInterface(ControlInterface):
     def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
         rgb = cv2.resize(rgb, self.resolution)
         depth = cv2.resize(depth, self.resolution)
-        mask = self.get_mask(rgb)
+        if self.mask_sim2real == 'v2':
+            mask = get_mask_v2(self.mask_generator, rgb)
 
-        norm_depth = (depth - np.min(depth)) / ((np.max(depth)) - np.min(depth))
-        masked_depth = norm_depth * mask
-        new_depth = np.ones_like(masked_depth)
-        new_depth = new_depth * (1 - mask) + masked_depth
+        rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+        if self.depth_sim2real in ['v1', 'v2']:
+            norm_depth = (depth - np.min(depth)) / ((np.max(depth)) - np.min(depth))
+            masked_depth = norm_depth * mask
+            new_depth = np.ones_like(masked_depth)
+            new_depth = new_depth * (1 - mask) + masked_depth
+        elif self.depth_sim2real == 'v0':
+            depth += (self.sim_camera_height - self.real_camera_height)
+            
 
         state = {
             'observation': {
@@ -112,14 +121,15 @@ class AgentArenaInterface(ControlInterface):
                 np.ones((1, 4)).astype(np.float32),
                 dtype=np.float32
             ),
-            'sim2real': True
+            'sim2real': True,
+            'task': self.task
         }
 
         if raw_rgb is not None:
-            raw_rgb = raw_rgb[40:-40, 40:-40]
-            full_mask = self.get_mask(raw_rgb)
+            raw_rgb = raw_rgb[100:-100, 150:-150]
+            full_mask = get_mask_v2(self.mask_generator, raw_rgb)[10:-10, 10:-10]
             state['observation']['full_mask'] = full_mask
-            raw_rgb = cv2.cvtColor(raw_rgb, cv2.COLOR_BGR2RGB)
+            raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb
 
         return state
@@ -173,11 +183,12 @@ if __name__ == "__main__":
     elif args.task == 'flattening':
         max_steps = 20
 
+    arena = 'softgym|domain:{},initial:{},action:pixel-pick-and-place(1),task:{}'.format(domain, initial, args.task)
     agent_config = agar.retrieve_config(
-        args.agent,
-        'softgym|domain:{},initial:{},action:pixel-pick-and-place(1),task:{}'.format(domain, initial, args.task),
-        args.config, args.log_dir
-    )
+        args.agent, 
+        arena, 
+        args.config,
+        args.log_dir)
 
     agent = agar.build_agent(
         args.agent,
@@ -188,25 +199,28 @@ if __name__ == "__main__":
         checkpoint = agent.load()
     else:
         agent.load_checkpoint(int(args.eval_checkpoint))
-
-    ### Run Sim2Real ###
-    sim2real = AgentArenaInterface(
-        agent, args.task, args.config, 
-        checkpoint, max_steps, 
-        adjust_orien=args.adjust_orien, 
-        adjust_pick=args.adjust_pick, 
-        save_dir=args.save_dir,
-        depth_sim2real=args.depth_sim2real,
-        mask_sim2real=args.mask_sim2real,
-        sim_camera_height=args.sim_camera_height
-    )
+        checkpoint = args.eval_checkpoint
+    print('Finsh Initialising Agent ...')
 
     try:
-        sim2real.run()
-    except Exception as e:
-        print(f'Caught exception: {e}')
-        print('Stack trace:')
-        traceback.print_exc()
-        sim2real.stop_video()  # If stop_video is a valid method, otherwise remove this line.
-        rospy.signal_shutdown("Exception occurred in Sim2Real node")
-        sim2real.destroy_node()
+        # Initialize ROS 1 node
+        rospy.init_node('agent_arena_interface_node')
+        ### Run Sim2Real ###
+        sim2real = AgentArenaInterface(
+            agent, args.task, args.config,
+            checkpoint, max_steps, 
+            adjust_orien=args.adjust_orien, 
+            adjust_pick=args.adjust_pick, 
+            save_dir=args.save_dir,
+            depth_sim2real=args.depth_sim2real,
+            mask_sim2real=args.mask_sim2real,
+            sim_camera_height=args.sim_camera_height)
+    
+    sim2real.run()
+except Exception as e:
+    print(f'Caught exception: {e}')
+    print('Stack trace:')
+    traceback.print_exc()
+    sim2real.stop_video()
+    rospy.signal_shutdown("Exception occurred in Sim2Real node")
+    sim2real.destroy_node()

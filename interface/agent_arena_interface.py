@@ -3,33 +3,36 @@
 import os
 import numpy as np
 import cv2
-import rospy
 import torch
 from gym.spaces import Box
-from segment_anything import SamAutomaticMaskGenerator
-from rcc_msgs.msg import NormPixelPnP, Observation
+import traceback
+import rospy
 from std_msgs.msg import Header
-from cv_bridge import CvBridge
+from rcc_msgs.msg import NormPixelPnP, Observation
 from agent_arena.utilities.visualisation_utils import *
+from cv_bridge import CvBridge, CvBridgeError
 from utils import *
 from control_interface import ControlInterface
+import agent_arena as agar
+
 
 class AgentArenaInterface(ControlInterface):
-    def __init__(self, agent, task, config_name, 
-                 checkpoint,
-                 steps=20, 
-                 adjust_pick=False, adjust_orien=False):
-        super(AgentArenaInterface, self).__init__(task, steps=steps, adjust_pick=adjust_pick, 
+    def __init__(self, agent, task, config_name, checkpoint,
+                 steps=20, adjust_pick=False, adjust_orien=False,
+                 depth_sim2real='v2', mask_sim2real='v2',
+                 sim_camera_height=0.65, save_dir='.'):
+        super(AgentArenaInterface, self).__init__(task, steps=steps, adjust_pick=adjust_pick,
                                                   name='agent', adjust_orien=adjust_orien)
-
         self.agent = agent
         self.save_dir = './agent_data/{}-{}-{}-{}'.format(task, agent.name, config_name, checkpoint)
         os.makedirs(self.save_dir, exist_ok=True)
+        self.depth_sim2real = depth_sim2real
+        self.mask_sim2real = mask_sim2real
+        self.sim_camera_height = sim_camera_height
         rospy.loginfo("Finished Initializing Agent Arena Interface")
 
     def save_step(self, state):
         super().save_step(state)
-        
         rgb = state['observation']['rgb']
         save_dir = os.path.join(self.save_dir, self.trj_name, f'step_{str(self.step)}')
         alpha = 0.7
@@ -78,10 +81,10 @@ class AgentArenaInterface(ControlInterface):
         rospy.loginfo("Action: {}".format(action))
 
         return action
-    
+
     def init(self, state):
         self.agent.init(state)
-    
+
     def update(self, state, action):
         self.agent.update(state, np.asarray(action['pick-and-place']))
 
@@ -121,6 +124,7 @@ class AgentArenaInterface(ControlInterface):
 
         return state
 
+
 def parse_arguments():
     """Parse command-line arguments."""
     import argparse
@@ -130,9 +134,18 @@ def parse_arguments():
     parser.add_argument('--agent', default='transporter')
     parser.add_argument('--config', default='MJ-TN-2000-rgb-maskout-rotation-90')
     parser.add_argument('--log_dir', default='/home/ah390/Data')
+    parser.add_argument('--save_dir', default='/data/sim2real')
     parser.add_argument('--eval_checkpoint', default=-1, type=int)
 
+    parser.add_argument('--depth_sim2real', default='v2')
+    parser.add_argument('--mask_sim2real', default='v2')
+    parser.add_argument('--sim_camera_height', default=0.65, type=float)
+
+    parser.add_argument('--adjust_pick', action='store_true')
+    parser.add_argument('--adjust_orien', action='store_true')
+
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -148,11 +161,11 @@ if __name__ == "__main__":
 
     domain = args.domain
     if args.task == 'all-corner-inward-folding':
-        max_steps = 4
-    elif args.task == 'corners-edge-inward-folding':
         max_steps = 6
+    elif args.task == 'corners-edge-inward-folding':
+        max_steps = 8
     elif args.task == 'diagonal-cross-folding':
-        max_steps = 2
+        max_steps = 4
     elif args.task == 'double-side-folding':
         max_steps = 8
     elif args.task == 'rectangular-folding':
@@ -161,7 +174,7 @@ if __name__ == "__main__":
         max_steps = 20
 
     agent_config = agar.retrieve_config(
-        args.agent, 
+        args.agent,
         'softgym|domain:{},initial:{},action:pixel-pick-and-place(1),task:{}'.format(domain, initial, args.task),
         args.config, args.log_dir
     )
@@ -172,12 +185,28 @@ if __name__ == "__main__":
     )
 
     if args.eval_checkpoint == -1:
-        agent.load()
+        checkpoint = agent.load()
     else:
         agent.load_checkpoint(int(args.eval_checkpoint))
-    
-    sim2real = AgentArenaInterface(agent, args.task, args.config, 
-                                   args.eval_checkpoint, max_steps, 
-                                   adjust_orien=True, adjust_pick=True)
 
-    rospy.spin()
+    ### Run Sim2Real ###
+    sim2real = AgentArenaInterface(
+        agent, args.task, args.config, 
+        checkpoint, max_steps, 
+        adjust_orien=args.adjust_orien, 
+        adjust_pick=args.adjust_pick, 
+        save_dir=args.save_dir,
+        depth_sim2real=args.depth_sim2real,
+        mask_sim2real=args.mask_sim2real,
+        sim_camera_height=args.sim_camera_height
+    )
+
+    try:
+        sim2real.run()
+    except Exception as e:
+        print(f'Caught exception: {e}')
+        print('Stack trace:')
+        traceback.print_exc()
+        sim2real.stop_video()  # If stop_video is a valid method, otherwise remove this line.
+        rospy.signal_shutdown("Exception occurred in Sim2Real node")
+        sim2real.destroy_node()

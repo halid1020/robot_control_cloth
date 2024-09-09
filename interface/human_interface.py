@@ -22,12 +22,13 @@ from control_interface import ControlInterface
 #     return image.get().astype(int).clip(0, 255)
 
 class HumanPickAndPlace(ControlInterface):
-    def __init__(self, task, steps=20, 
+    def __init__(self, task, steps=20,
                  adjust_pick=False, adjust_orien=False):
         
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
                          name='human', adjust_orien=adjust_orien)
         self.save_dir = f'./human_data/{task}'
+        #self.mask_sim2real = mask_sim2real
         os.makedirs(self.save_dir, exist_ok=True)
         # self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
         # self.pnp_pub = self.create_publisher(NormPixelPnP, '/norm_pixel_pnp', 10)
@@ -229,7 +230,12 @@ class HumanPickAndPlace(ControlInterface):
         #mask = self.get_mask(rgb)
         rgb = cv2.resize(rgb, self.resolution)
         depth = cv2.resize(depth, self.resolution)
-        mask = self.get_mask(rgb)  
+
+        mask_v2 = get_mask_v2(self.mask_generator, rgb)
+        mask_v1 = get_mask_v1(self.mask_generator, rgb)
+        mask_v0 = get_mask_v0(rgb) 
+        
+        rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
        
 
@@ -239,10 +245,19 @@ class HumanPickAndPlace(ControlInterface):
             'observation': {
                 'rgb': rgb.copy(),
                 'depth': norm_depth.copy(),
-                'mask': mask.copy()
+                'mask': mask_v2.copy(),
+                'mask_v1': mask_v1.copy(),
+                'mask_v0': mask_v0.copy(),
+                'mask_v2': mask_v2.copy()
             }
         }
         
+        if raw_rgb is not None:
+            raw_rgb = raw_rgb[100:-100, 150:-150]
+            full_mask = get_mask_v2(self.mask_generator, raw_rgb)[10:-10, 10:-10]
+            state['observation']['full_mask'] = full_mask
+            raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
+            state['observation']['raw_rgb'] = raw_rgb
         
         return state
 
@@ -252,8 +267,9 @@ def main():
     max_steps = 20  # Default max steps, replace with task-specific logic if needed
     adjust_pick=True
     adjust_orien=True
-    sim2real = HumanPickAndPlace(task, max_steps, 
-                                 adjust_pick, adjust_orien)
+    sim2real = HumanPickAndPlace(task, max_steps,
+                                 adjust_pick, adjust_orien,
+                                 )
     sim2real.run()
     rclpy.shutdown()
 

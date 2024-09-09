@@ -63,8 +63,8 @@ class ControlInterface(Node):
 
     def _save_step(self, state, save_dir):
         rgb = state['observation']['rgb']
-        raw_rgb = state['observation']['raw_rgb']
-        full_mask = state['observation']['full_mask']
+        
+        
         depth = state['observation']['depth']
         mask = state['observation']['mask']
         
@@ -72,11 +72,30 @@ class ControlInterface(Node):
         os.makedirs(save_dir, exist_ok=True)
         print('rgb shape', rgb.shape)
         save_color(rgb, filename='rgb', directory=save_dir)
-        save_color(raw_rgb, filename='raw_rgb', directory=save_dir)
+        
         save_depth(depth, filename='depth', directory=save_dir)
         save_depth(depth, filename='colour_depth', directory=save_dir, colour=True)
         save_mask(mask, filename='mask', directory=save_dir)
-        save_mask(full_mask, filename='full_mask', directory=save_dir)
+        
+        if 'full_mask' in state['observation']:
+            full_mask = state['observation']['full_mask']
+            save_mask(full_mask, filename='full_mask', directory=save_dir)
+
+        if 'mask_v2' in state['observation']:
+            mask_v2 = state['observation']['mask_v2']
+            save_mask(mask_v2, filename='mask_v2', directory=save_dir)
+        
+        if 'mask_v1' in state['observation']:
+            mask_v1 = state['observation']['mask_v1']
+            save_mask(mask_v1, filename='mask_v1', directory=save_dir)
+        
+        if 'mask_v0' in state['observation']:
+            mask_v0 = state['observation']['mask_v0']
+            save_mask(mask_v0, filename='mask_v0', directory=save_dir)
+
+        if 'raw_rgb' in state['observation']:
+            raw_rgb = state['observation']['raw_rgb']
+            save_color(raw_rgb, filename='raw_rgb', directory=save_dir)
 
         if 'input_obs' in state:
             input_obs = state['input_obs']

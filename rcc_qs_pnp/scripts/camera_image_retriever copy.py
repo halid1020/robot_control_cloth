@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
-import rclpy
-from rclpy.node import Node
+import rospy
 from sensor_msgs.msg import Image, CameraInfo
 from cv_bridge import CvBridge
 import cv2
@@ -9,29 +8,29 @@ import numpy as np
 import time
 import pyrealsense2 as rs
 
-class CameraImageRetriever(Node):
+class CameraImageRetriever:
     def __init__(self):
-        super().__init__('camera_image_retriever')
+        rospy.init_node('camera_image_retriever', anonymous=True)
         self.bridge = CvBridge()
-        self.color_subscription = self.create_subscription(
-            Image,
+        self.color_subscription = rospy.Subscriber(
             '/camera/camera/color/image_raw',
-            self.color_callback,
-            10)
-        self.depth_subscription = self.create_subscription(
             Image,
+            self.color_callback,
+            queue_size=10)
+        self.depth_subscription = rospy.Subscriber(
             '/camera/camera/depth/image_rect_raw',
+            Image,
             self.depth_callback,
-            10)
-        self.camera_info_subscription = self.create_subscription(
-            CameraInfo,
+            queue_size=10)
+        self.camera_info_subscription = rospy.Subscriber(
             '/camera/camera/color/camera_info',
+            CameraInfo,
             self.camera_info_callback,
-            10)
+            queue_size=10)
         self.color_image = None
         self.depth_image = None
         self.intrinsic = None
-        time.sleep(2)
+        time.sleep(2)  # Allow some time for topics to be ready
 
     def camera_info_callback(self, msg):
         # Extract the intrinsic matrix from the CameraInfo message
@@ -50,52 +49,50 @@ class CameraImageRetriever(Node):
             self.color_image = self.bridge.imgmsg_to_cv2(msg, "bgr8")
             self.color_image = np.asarray(self.color_image)
         except Exception as e:
-            self.get_logger().error('Failed to convert color image: %s' % str(e))
+            rospy.logerr('Failed to convert color image: %s' % str(e))
 
     def depth_callback(self, msg):
         try:
             self.depth_image = self.bridge.imgmsg_to_cv2(msg, "passthrough")
             self.depth_image = np.asarray(self.depth_image)
         except Exception as e:
-            self.get_logger().error('Failed to convert depth image: %s' % str(e))
+            rospy.logerr('Failed to convert depth image: %s' % str(e))
 
     def get_images(self):
         print('getting image')
-        rclpy.spin_once(self)
+        rospy.sleep(0.1)
         if self.color_image is not None and self.depth_image is not None:
             cv2.imwrite('color_image.jpg', self.color_image)
            
-            self.depth_image = np.asarray(self.depth_image)/1000
+            self.depth_image = np.asarray(self.depth_image) / 1000
             print(self.depth_image)
-            self.depth_image = (self.depth_image - np.min(self.depth_image))/(np.max(self.depth_image)-np.min(self.depth_image))
-            cv2.imwrite('depth_image.jpg', (self.depth_image*255).astype(np.int8))
-            self.get_logger().info('Images saved')
+            self.depth_image = (self.depth_image - np.min(self.depth_image)) / (np.max(self.depth_image) - np.min(self.depth_image))
+            cv2.imwrite('depth_image.jpg', (self.depth_image * 255).astype(np.uint8))
+            rospy.loginfo('Images saved')
         else:
-            self.get_logger().info('Images not available yet')
+            rospy.loginfo('Images not available yet')
 
     def get_intrinsic(self):
         return self.intrinsic
     
     def take_rgbd(self):
-        rclpy.spin_once(self)
+        rospy.sleep(0.1)
         if self.color_image is not None and self.depth_image is not None:
-            return self.color_image, self.depth_image/1000
+            return self.color_image, self.depth_image / 1000
         else:
             return None, None
 
-def main(args=None):
-    rclpy.init(args=args)
+def main():
     image_retriever = CameraImageRetriever()
 
     try:
-        while rclpy.ok():
+        while not rospy.is_shutdown():
             command = input("Press Enter to capture images or 'q' to quit: ")
             if command.lower() == 'q':
                 break
             image_retriever.get_images()
     finally:
-        image_retriever.destroy_node()
-        rclpy.shutdown()
+        pass  # No need for destroy_node() in rospy
 
 if __name__ == '__main__':
     main()

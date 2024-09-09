@@ -4,86 +4,68 @@ import os
 import rospy
 import numpy as np
 import cv2
+import json
+
 from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
-from utils import *
-from segment_anything import SamAutomaticMaskGenerator
-from scipy.ndimage import distance_transform_edt
-from segment_anything import SamAutomaticMaskGenerator
 
+from utils import *
 
 class ControlInterface:
     def __init__(self, task, steps=20, name='control_interface',
-                 adjust_pick=False, adjust_orien=False, video_device='/dev/video6'):
-        rospy.init_node(f"{name}_interface")
-        
-        self.task = task
-        self.fix_steps = steps
-        self.adjust_pick = adjust_pick
-        self.adjust_orien = adjust_orien
-        self.video_device = video_device
+                 adjust_pick=False, adjust_orien=False, video_device='/dev/video6', save_dir='.'):
+        self.img_sub = rospy.Subscriber('/observation', Observation, self.img_callback, queue_size=10)
+        self.pnp_pub = rospy.Publisher('/norm_pixel_pnp', NormPixelPnP, queue_size=10)
+        self.reset_pub = rospy.Publisher('/reset', Header, queue_size=10)
         self.resolution = (256, 256)
+        self.fix_steps = steps
+        self.mask_generator = get_mask_generator()
+        self.task = task
+        self.save_dir = save_dir
+
         self.step = -1
         self.last_action = None
         self.trj_name = ''
+        self.adjust_pick = adjust_pick
+        self.adjust_orient = adjust_orien
+        self.video_device = video_device
         self.video_process = None
 
-        self.img_sub = rospy.Subscriber('/observation', Observation, self.img_callback)
-        self.pnp_pub = rospy.Publisher('/norm_pixel_pnp', NormPixelPnP, queue_size=10)
-        self.reset_pub = rospy.Publisher('/reset', Header, queue_size=10)
-        
-        self.mask_generator = get_mask_generator()
+        if 'folding' in task:
+            self.collect_demo = False
+            self.demo_states = []
+
+        print('Finish Init Control Interface')
 
     def publish_action(self, pnp):
         data = pnp['pick-and-place']
         pnp_msg = NormPixelPnP()
+        pnp_msg.header = Header()
         pnp_msg.header.stamp = rospy.Time.now()
         pnp_msg.data = (data[0], data[1], data[2], data[3])
         pnp_msg.degree = pnp['orientation']
+        pnp_msg.place_height = 0.03
+        if 'folding' in self.task:
+            pnp_msg.place_height = 0.02
+
         self.pnp_pub.publish(pnp_msg)
-
-    def get_mask(self, rgb):
-        results = self.mask_generator.generate(rgb)
-        final_mask = None
-        max_color_difference = 0
-
-        for result in results:
-            segmentation_mask = result['segmentation']
-            masked_region = cv2.bitwise_and(rgb, rgb, mask=segmentation_mask.astype(np.uint8) * 255)
-            background_region = cv2.bitwise_and(rgb, rgb, mask=cv2.bitwise_not(segmentation_mask.astype(np.uint8) * 255))
-            
-            masked_pixels = masked_region[segmentation_mask == 255]
-            if masked_pixels.size == 0:
-                continue
-            
-            avg_masked_color = np.mean(masked_pixels, axis=0)
-            background_pixels = background_region[segmentation_mask == 0]
-            avg_background_color = np.mean(background_pixels, axis=0)
-            color_difference = np.linalg.norm(avg_masked_color - avg_background_color)
-            
-            if color_difference > max_color_difference:
-                final_mask = (segmentation_mask / 255).astype(np.bool8)
-                max_color_difference = color_difference
-        
-        return final_mask
 
     def publish_reset(self):
         header = Header()
         header.stamp = rospy.Time.now()
         self.reset_pub.publish(header)
-        rospy.loginfo("Published reset!")
+        print('Published reset!')
 
-    def save_step(self, state):
+    def _save_step(self, state, save_dir):
         rgb = state['observation']['rgb']
         raw_rgb = state['observation']['raw_rgb']
         full_mask = state['observation']['full_mask']
         depth = state['observation']['depth']
         mask = state['observation']['mask']
-        
-        save_dir = os.path.join(self.save_dir, self.trj_name, f'step_{str(self.step)}')
+
         os.makedirs(save_dir, exist_ok=True)
-        
+        print('rgb shape', rgb.shape)
         save_color(rgb, filename='rgb', directory=save_dir)
         save_color(raw_rgb, filename='raw_rgb', directory=save_dir)
         save_depth(depth, filename='depth', directory=save_dir)
@@ -94,68 +76,117 @@ class ControlInterface:
         if 'action' in state:
             action = state['action']
             action_image = state['action_image']
+            print('action image', action_image.shape)
             save_color(action_image, filename='action_image', directory=save_dir)
             with open(f'{save_dir}/action.json', "w") as json_file:
                 json.dump(action, json_file, indent=4)
 
+        if 'evaluation' in state:
+            evaluation = state['evaluation']
+            with open(f'{save_dir}/evaluation.json', "w") as json_file:
+                json.dump(evaluation, json_file, indent=4)
+
+    def save_step(self, state):
+        save_dir = os.path.join(self.save_dir, self.trj_name, f'step_{str(self.step)}')
+        self._save_step(state, save_dir)
+
     def evaluate(self, state):
-        current_mask = state['observation']['full_mask']
-        cur_mask_pixels = int(np.sum(current_mask))
-        rospy.loginfo(f"Current mask pixels: {cur_mask_pixels}")
+        if self.task == 'flattening':
+            current_mask = state['observation']['full_mask']
+            cur_mask_pixels = int(np.sum(current_mask))
+            print('current_mask', cur_mask_pixels)
 
-        if self.step == 0:
-            self.init_mask_pixels = cur_mask_pixels
+            if self.step == 0:
+                self.init_mask_pixels = cur_mask_pixels
 
-        res = {
-            'max_coverage': self.max_mask_pixels,
-            'init_coverage': self.init_mask_pixels,
-            'coverage': cur_mask_pixels,
-            'normalised_coverage': 1.0 * cur_mask_pixels / self.max_mask_pixels,
-            'normalised_improvement': max(min(1.0 * (cur_mask_pixels - self.init_mask_pixels) / (self.max_mask_pixels - self.init_mask_pixels), 1), 0),
-            'success': False
-        }
+            res = {
+                'max_coverage': self.max_mask_pixels,
+                'init_coverage': self.init_mask_pixels,
+                'coverage': cur_mask_pixels,
+                'normalised_coverage': 1.0 * cur_mask_pixels/self.max_mask_pixels,
+                'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels) / (self.max_mask_pixels - self.init_mask_pixels), 1), 0),
+                'auto success': bool(1.0 * cur_mask_pixels/self.max_mask_pixels > 0.95),
+                'human success': False
+            }
 
-        return res
+            return res
+        elif 'folding' in self.task:
+            IoU, matched_mask = get_IoU(state['observation']['mask'], self.goal_mask)
+            save_mask(matched_mask, filename='matched_mask', directory='tmp')
+            return {
+                'human success': False,
+                'auto success': bool(IoU > 0.9),
+                'IoU': IoU}
 
     def setup_evaluation(self, state):
-        current_mask = state['observation']['full_mask']
-        self.max_mask_pixels = int(np.sum(current_mask))
-        rospy.loginfo(f"Max mask pixels: {self.max_mask_pixels}")
+        if self.task == 'flattening':
+            current_mask = state['observation']['mask']
+            self.max_mask_pixels = int(np.sum(current_mask))
+            save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_0')
+            self._save_step(state, save_dir)
+
+        elif 'folding' in self.task:
+            self.demo_states.append(state)
+
+            while True:
+                finish_demo = input('[User Attention!] Finish the demonstration? (y/n): ')
+                if finish_demo == 'n':
+                    self.collect_demo = True
+                    break
+                elif finish_demo == 'y':
+                    self.collect_demo = False
+                    break
+                else:
+                    print('[User Attention!] Invalid input')
+                    continue
+
+            if self.collect_demo:
+                demo_step = input('[User Attention!] Make a move manually, and enter any key to continue when finished!')
+                self.step = -1
+                self.publish_reset()
+                return
+            else:
+                for i, state in enumerate(self.demo_states):
+                    save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_{i}')
+                    self._save_step(state, save_dir)
+
+                self.goal_mask = self.demo_states[-1]['observation']['mask']
+
         self.setup_init_state()
+        self.start_video()
+        self.publish_reset()
 
     def setup_init_state(self):
-        raw_input('[User Attention!] Please set a random initial state, and press any key to continue!')
+        is_continue = input('[User Attention!] Please set a random initial state, and enter any keys after setup to continue!')
 
     def clean_up(self, state):
         self.stop_video()
 
         while True:
-            is_success = raw_input('[User Attention!] Was the task successful? (y/n): ').strip().lower()
+            is_success = input('[User Attention!] Is the task successful? (y/n): ')
             if is_success == 'y':
-                state['evaluation']['success'] = True
+                state['evaluation']['human success'] = True
                 break
             elif is_success == 'n':
-                state['evaluation']['success'] = False
+                state['evaluation']['human success'] = False
                 break
             else:
-                rospy.loginfo('[User Attention!] Invalid input')
+                print('[User Attention!] Invalid input')
                 continue
-
         self.save_step(state)
         self.reset()
 
     def img_callback(self, data):
-        rospy.loginfo("Received observation data")
+        print('Receive observation data')
         crop_rgb = imgmsg_to_cv2_custom(data.crop_rgb, "bgr8")
         crop_depth = imgmsg_to_cv2_custom(data.crop_depth, "64FC1")
         raw_rgb = imgmsg_to_cv2_custom(data.raw_rgb, "bgr8")
+        self.real_camera_height = data.camera_height
         input_state = self.post_process(crop_rgb, crop_depth, raw_rgb)
 
         if self.step == -1:
             self.step += 1
             self.setup_evaluation(input_state)
-            self.start_video()
-            self.publish_reset()
             return
 
         evaluation = self.evaluate(input_state)
@@ -163,43 +194,89 @@ class ControlInterface:
         done = (self.step >= self.fix_steps)
 
         if wait_for_user_input():
-            rospy.loginfo("User signaled finish.")
+            print("User signaled finish.")
             done = True
 
         if done:
             self.clean_up(input_state)
+            return
         elif self.step == 0:
             self.init(input_state)
         else:
             self.update(input_state, self.last_action)
 
         action = self.act(input_state)
+        internal_state = self.get_state()
+
+        save_state = input_state.copy()
+        save_state.update(internal_state)
+
         self.last_action = action
-        self.publish_action(action)
+        pick_and_place = action['pick-and-place']
+        pixel_actions = ((pick_and_place + 1) / 2 * self.resolution[0]).astype(int).reshape(4)
+        action_image = draw_pick_and_place(
+            save_state['observation']['rgb'],
+            tuple(pixel_actions[:2]),
+            tuple(pixel_actions[2:]),
+            color=(0, 255, 0)
+        ).astype(np.uint8)
+        action['pick-and-place'] = action['pick-and-place'].reshape(4).tolist()
+        save_state['action'] = action
+        save_state['action_image'] = action_image
+        self.save_step(save_state)
         self.step += 1
+        self.publish_action(action)
 
     def act(self, state):
-        raise NotImplementedError("This method should be implemented in a derived class.")
+        pass
 
-    def update(self, state, action):
-        raise NotImplementedError("This method should be implemented in a derived class.")
+    def setup(self):
+        if self.task == 'flattening':
+            final_state = input('[User Attention!] Please set to the final state for setup evaluation, please enter any key when finished!')
+        elif 'folding' in self.task:
+            while True:
+                new_demo = input('[User Attention!] Do you want to start a new demonstration? (y/n): ')
+                if new_demo == 'n':
+                    self.collect_demo = False
+                    break
+                elif new_demo == 'y':
+                    self.collect_demo = True
+                    break
+                else:
+                    print('[User Attention!] Invalid input')
+                    continue
 
-    def init(self, state):
-        raise NotImplementedError("This method should be implemented in a derived class.")
+            if self.collect_demo:
+                self.demo_states = []
+                init_state = input('[User Attention!] Please set the initial state for setup demonstration, please enter any key when finished!')
+            else:
+                self.setup_init_state()
+                self.start_video()
+                self.step = 0
 
-    def get_state(self):
-        return {}
+        self.publish_reset()
 
-    def run(self):
-        self.reset()
-        rospy.spin()
+    def reset(self):
+        self.step = -1
+        self.last_action = None
 
-    def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
-        raise NotImplementedError("This method should be implemented in a derived class.")
+        while True:
+            is_continue = input('[User Attention!] Continue for a new trial? (y/n): ')
+            if is_continue == 'n':
+                rospy.signal_shutdown("Task Complete")
+                break
+            elif is_continue == 'y':
+                self.trj_name = input('[User Attention!] Enter Trial Name: ')
+                break
+            else:
+                print('Invalid input')
+                continue
+
+        self.setup()
 
     def stop_video(self):
         if self.video_process is not None:
-            rospy.loginfo("Stopping video recording!")
+            print('Stop recording!')
             stop_ffmpeg_recording(self.video_process)
 
     def start_video(self):
@@ -209,18 +286,18 @@ class ControlInterface:
             output_file = os.path.join(save_dir, 'record.mp4')
             self.video_process = start_ffmpeg_recording(output_file, self.video_device)
 
-    def reset(self):
-        self.step = -1
-        self.last_action = None
+    def update(self, state, action):
+        pass
 
-        while True:
-            is_continue = raw_input('[User Attention!] Start a new trial? (y/n): ').strip().lower()
-            if is_continue == 'y':
-                self.trj_name = raw_input('[User Attention!] Enter Trial Name: ').strip()
-                break
-            elif is_continue == 'n':
-                raise rospy.ROSInterruptException("User stopped the process.")
-            else:
-                rospy.loginfo('[User Attention!] Invalid input')
+    def init(self, state):
+        pass
 
-        self.setup()
+    def get_state(self):
+        return {}
+
+    def run(self):
+        self.reset()
+        rospy.spin()
+
+    def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
+        pass

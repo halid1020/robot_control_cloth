@@ -81,7 +81,6 @@ class CameraImageRetriever:
 
 def main():
     rospy.init_node('camera_image_retriever', anonymous=True)
-    camera_height = 1.0  # You may replace this with your actual camera height
     image_retriever = CameraImageRetriever(camera_height)
 
     try:

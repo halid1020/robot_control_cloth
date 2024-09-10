@@ -5,7 +5,7 @@ from collections import namedtuple
 from dotmap import DotMap   
 import yaml
 import os
-from ament_index_python.packages import get_package_share_directory
+import rospkg  # For ROS 1 package directory access
 from geometry_msgs.msg import PoseStamped
 import cv2
 
@@ -27,9 +27,9 @@ def save_depth(depth, filename='depth', directory="."):
     depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_JET)
     cv2.imwrite('{}/{}.png'.format(directory, filename), depth)
 
-def save_mask(mask, filename='mask', direcotry="."):
+def save_mask(mask, filename='mask', directory="."):
     mask = mask.astype(np.int8)*255
-    cv2.imwrite('{}/{}.png'.format(direcotry, filename), mask)
+    cv2.imwrite('{}/{}.png'.format(directory, filename), mask)
 
 def normalise_quaterion(q):
     q = np.array(q)
@@ -38,8 +38,10 @@ def normalise_quaterion(q):
         raise ValueError("Cannot normalize a zero quaternion.")
     return q / norm
 
+# Change for ROS 1: use rospkg instead of ament_index_python
 def load_config(config_name):
-    config_dir = os.path.join(get_package_share_directory('rcc_qs_pnp'), 'config')
+    rospack = rospkg.RosPack()
+    config_dir = os.path.join(rospack.get_path('rcc_qs_pnp'), 'config')
     config_file_path = os.path.join(config_dir, f"{config_name}.yaml")
     with open(config_file_path, 'r') as file:
         config_dict = yaml.safe_load(file)
@@ -68,48 +70,10 @@ def add_quaternions(quat1, quat2):
     Returns:
     np.array: The resulting quaternion after combining the rotations.
     """
-    # Convert the input quaternions to Rotation objects
     r1 = R.from_quat(quat1)
     r2 = R.from_quat(quat2)
-    
-    # Multiply the quaternions
     combined_rotation = r1 * r2
-    
-    # Return the resulting quaternion
     return combined_rotation.as_quat()
-
-# def camera2base(camera_pose, camera_orientation_quat, particles_camera):
-#     r = R.from_quat(camera_orientation_quat)
-#     rotation_matrix = r.as_matrix()
-#     particles_camera = np.array(particles_camera)
-#     particle_base = np.matmul(rotation_matrix, particles_camera) + np.array(camera_pose)
-#     return particle_base
-
-# def camera2base(camera_pos: MyPos, particles_camera):
-#     camera_pose = camera_pos.pose
-#     camera_orientation_quat = camera_pos.orien
-#     r = R.from_quat(camera_orientation_quat)
-#     rotation_matrix = r.as_matrix()
-#     particles_camera = np.array(particles_camera)
-#     particle_base = np.matmul(rotation_matrix, particles_camera) + np.array(camera_pose)
-#     return particle_base
-
-# def pixel2camera(pixel_point, depth, intrinsic):
-#     pixel_point = [int(pixel_point[0]), int(pixel_point[1])]
-#     return rs.rs2_deproject_pixel_to_point(intrinsic, pixel_point, depth)
-
-# def camera2pixel(point_3d, intrinsic):
-#     pixel = rs.rs2_project_point_to_pixel(intrinsic, point_3d)
-#     return pixel
-
-# def pixel2base(pixel_point, camera_intrinsic, camera_pos:MyPos, depth):
-    
-#     camera_p = pixel2camera(pixel_point, depth, camera_intrinsic)
-    
-    
-#     base_p = camera2base(camera_pos, camera_p)
-
-#     return base_p
 
 def camera2base(camera_pos: MyPos, particles_camera):
     camera_pose = np.array(camera_pos.pose)
@@ -173,7 +137,6 @@ def bilinear_interpolation(x, y, x1, y1, x2, y2, q11, q21, q12, q22):
     interpolated_value = q11 * w11 + q21 * w21 + q12 * w12 + q22 * w22
     return interpolated_value
 
-
 def interpolate_image(height, width, corner_values):
     interpolated_image = np.zeros((height, width))
     for i in range(height):
@@ -188,6 +151,5 @@ def interpolate_image(height, width, corner_values):
             q21 = corner_values[(x2, y1)]
             q12 = corner_values[(x1, y2)]
             q22 = corner_values[(x2, y2)]
-            interpolated_image[i, j] = \
-                bilinear_interpolation(x, y, x1, y1, x2, y2, q11, q21, q12, q22)
+            interpolated_image[i, j] = bilinear_interpolation(x, y, x1, y1, x2, y2, q11, q21, q12, q22)
     return interpolated_image

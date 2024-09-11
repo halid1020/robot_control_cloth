@@ -17,9 +17,9 @@ from geometry_msgs.msg import PoseStamped
 from cv_bridge import CvBridge
 
 from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
-from utils import *
+from rcc_utils import *
 
-from active_gripper_control import ActiveGripperControl
+from panda_gripper_control import PandaGripperControl
 from camera_image_retriever import CameraImageRetriever
 from panda_robot_moveit import FrankaRobotMoveit  # Assuming Franka robot is used
 from rospy import Rate
@@ -30,7 +30,7 @@ from rospy import Rate
 
 class QuasiStaticPickAndPlace:
     def __init__(self, config, mock=False, estimate_pick_depth=False):
-        rospy.init_node('quasi_static_pick_and_place', anonymous=True)
+        rospy.init_node('qs_pnp', anonymous=True)
         
         # Initialize MoveIt commander
         self.logger = rospy.loginfo
@@ -109,7 +109,7 @@ class QuasiStaticPickAndPlace:
         self.execute_pick_and_place(base_pick, base_place)
 
     def _initialize_gripper(self):
-        self.gripper = ActiveGripperControl()
+        self.gripper = PandaGripperControl()
         self.g2e_offset = self.config.g2e_offset
 
     def _initialize_robot(self):
@@ -124,11 +124,16 @@ class QuasiStaticPickAndPlace:
 
         self.pick_raise_offset = self.config.pick_raise_offset
         self.place_raise_offset = self.config.place_raise_offset
+        self.go_home()
 
     def _initialize_camera(self):
-        camera_orien = euler_to_quaternion(self.config.camera_orien)
-        self.camera_pos = MyPos(pose=self.config.camera_pose, orien=normalise_quaterion(camera_orien))
-        self.camera_height = self.config.camera_pose[2]
+        camera_orien = euler_to_quaternion(list(self.config.camera_orien))
+        pose = self.robot_arm.get_current_pose().pose  # Retrieve current pose
+        self.home_pos = np.asarray([pose.position.x,pose.position.y,pose.position.z])
+        self.camera_offset = np.asarray(self.config.camera_pose)
+        self.camera_pose = self.home_pos + self.camera_offset
+        self.camera_pos = MyPos(pose=self.camera_pose, orien=normalise_quaterion(camera_orien))
+        self.camera_height = self.camera_pose[2]
         self.camera = CameraImageRetriever(self.camera_height)
         self.camera_intrinstic = self.camera.get_intrinsic()
 
@@ -275,8 +280,8 @@ class QuasiStaticPickAndPlace:
 
     def test_world_pick_and_place(self):
         self.go_home()
-        pick = MyPos(pose=[-0.5, 0.15, self.config.g2e_offset], orien=self.fix_orien)
-        place = MyPos(pose=[-0.5, -0.19, self.config.g2e_offset], orien=self.fix_orien)
+        pick = MyPos(pose=[0.2, 0.2, self.config.g2e_offset], orien=self.fix_orien)
+        place = MyPos(pose=[0.3, 0.3, self.config.g2e_offset], orien=self.fix_orien)
         self.execute_pick_and_place(pick, place)
 
     def test_pixel_pick_and_place(self, pixel_pnp=[-1, -1, -1, -1], random=False):
@@ -313,7 +318,10 @@ class QuasiStaticPickAndPlace:
 
 
 if __name__ == '__main__':
-    config_name = "franka_panda_config"
+    config_name = "panda_original_realsense_nottingham"
     config = load_config(config_name)
     qspnp = QuasiStaticPickAndPlace(config=config, mock=False)
-    qspnp.run()
+    # qspnp.test_world_pick_and_place()
+    # qspnp.test_camera(crop=True)
+    qspnp.test_pixel_pick_and_place()
+    # qspnp.run()

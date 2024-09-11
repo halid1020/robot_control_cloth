@@ -7,7 +7,6 @@ import franka_gripper.msg
 
 class PandaGripperControl:
     def __init__(self):
-        rospy.init_node('client_test', anonymous=True)
         self.gripper_client = actionlib.SimpleActionClient('/franka_gripper/move', franka_gripper.msg.MoveAction)
         self.gripper_client.wait_for_server()
 
@@ -64,6 +63,7 @@ class PandaGripperControl:
         
 
 def main():
+    rospy.init_node('client_test', anonymous=True)
     io_client = PandaGripperControl()
     io_client.open()
     io_client.grasp()

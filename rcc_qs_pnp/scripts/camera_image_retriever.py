@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import time
 import pyrealsense2 as rs
-from utils import save_depth
+from rcc_utils import save_depth
 
 class CameraImageRetriever:
     def __init__(self, camera_height):

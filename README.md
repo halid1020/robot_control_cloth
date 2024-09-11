@@ -160,3 +160,24 @@ pkill -SIGINT ffmpeg
 ```
 python agent_arena_interface.py --agent foldsformer --domain ffmr-square-fabric --adjust_pick --adjust_orien --depth_sim2real v0 --mask_sim2real v2 --task all-corner-inward-folding --config default
 ```
+
+
+panda
+
+1. source ~/ws_franka/devel/setup.sh
+2. roslaunch franka_control franka_control.launch robot_ip:=172.22.2.4 load_gripper:=true robot:=panda arm_id:=bob 
+3. python3 panda_gripper_control.py
+
+How to run panda moveit
+1. Open terminal and go to cloth_manip_catkin_ws$ 
+2. source devel/setup.sh
+3. and run roslaunch rcc_qs_pnp franka_robot_moveit_executable.launch 
+Run the script 
+1. Then open another terminal go to cloth_manip_catkin_ws$
+2. source devel/setup.sh
+3. cd src/robot_control_cloth/rcc_qs_pnp/scripts/
+4. run python3 panda_robot_moveit.py 
+
+
+
+

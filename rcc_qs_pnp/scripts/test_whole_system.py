@@ -1,38 +1,36 @@
-#!/usr/bin/env python3
-## robot driver and realsense are launch
+#!/usr/bin/env python
+## robot driver and realsense are launched
 
-import rclpy
-
+import rospy
 from active_gripper_control import ActiveGripperControl
 from camera_image_retriever import CameraImageRetriever
-from ur3e_robot_moveit import UR3eRobotMoveit
-
+from panda_robot_moveit import FrankaRobotMoveit  # Changed to FrankaRobotMoveit
 
 def main():
-    #print('pin id', SetIO.PIN_TOOL_DOUT1 )
-    rclpy.init()
+    rospy.init_node('robot_control_node', anonymous=True)  # ROS 1 Node Initialization
+    
     gripper_control = ActiveGripperControl()
-    camera_retriver = CameraImageRetriever()
-    ur3e_robot = UR3eRobotMoveit()
+    camera_retriever = CameraImageRetriever()
+    franka_robot = FrankaRobotMoveit()  # Changed to FrankaRobotMoveit
 
     gripper_control.open()
     gripper_control.grasp()
-    ur3e_robot.go_pose(name='home')
-    ur3e_robot.go_pose(name='up')
-    
+    franka_robot.go_pose(name='home')
+    franka_robot.go_pose(name='up')
+
     try:
-        while rclpy.ok():
+        while not rospy.is_shutdown():  # ROS 1 loop control
             for i in range(3):
-                camera_retriver.get_images()
+                camera_retriever.get_images()
                 gripper_control.open()
                 gripper_control.grasp()
-                ur3e_robot.go_pose(name='home')
-                ur3e_robot.go_pose(name='up')
+                franka_robot.go_pose(name='home')
+                franka_robot.go_pose(name='up')
             break
     finally:
-        camera_retriver.destroy_node()
-        gripper_control.destroy_node()
-        rclpy.shutdown()
-        
+        # Since ROS 1 doesn't have the destroy_node function, just shut down nodes gracefully
+        rospy.loginfo("Shutting down nodes...")
+        rospy.signal_shutdown("Robot control node finished")
+
 if __name__ == '__main__':
     main()

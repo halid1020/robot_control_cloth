@@ -1,33 +1,38 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.0.2)
 project(rcc_msgs)
 
 # Use C++14
 set(CMAKE_CXX_STANDARD 14)
 
 # Find dependencies
-find_package(ament_cmake REQUIRED)
-find_package(rclpy REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-find_package(builtin_interfaces REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
+find_package(catkin REQUIRED COMPONENTS
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+  message_generation
+)
 
 # Define message files
-set(msg_files
-  "msg/NormPixelPnP.msg"
-  "msg/Observation.msg"
-  "msg/Reset.msg"
-  "msg/WorldPnP.msg"
+add_message_files(
+  FILES
+  NormPixelPnP.msg
+  Observation.msg
+  Reset.msg
+  WorldPnP.msg
 )
-
 
 # Generate messages
-rosidl_generate_interfaces(${PROJECT_NAME}
-  ${msg_files}
-  DEPENDENCIES builtin_interfaces std_msgs geometry_msgs sensor_msgs
+generate_messages(
+  DEPENDENCIES std_msgs geometry_msgs sensor_msgs
 )
 
-# Export dependencies
-ament_export_dependencies(rosidl_default_runtime)
-ament_package()
+# Define the catkin package
+catkin_package(
+  CATKIN_DEPENDS message_runtime std_msgs geometry_msgs sensor_msgs
+)
+
+# Include directories
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+)
+

@@ -1,58 +1,46 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.0.2)
 project(rcc_qs_pnp)
 
 # Use C++14
 set(CMAKE_CXX_STANDARD 14)
 
 # Find dependencies
-find_package(ament_cmake REQUIRED)
-find_package(rclpy REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-find_package(builtin_interfaces REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(moveit_py REQUIRED)
-find_package(moveit_ros_planning_interface REQUIRED)
-# find_package(rcc_msgs REQUIRED)
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  std_msgs
+  sensor_msgs
+  geometry_msgs
+  moveit_ros_planning_interface
+)
 
-# Define message files
-# set(msg_files
-#   "msg/NormPixelPnP.msg"
-#   "msg/Observation.msg"
-#   "msg/Reset.msg"
-#   "msg/WorldPnP.msg"
-# )
+# Define the catkin package
+catkin_package(
+  CATKIN_DEPENDS roscpp std_msgs sensor_msgs geometry_msgs moveit_ros_planning_interface
+)
 
-
-# Generate messages
-# rosidl_generate_interfaces(${PROJECT_NAME}
-#   ${msg_files}
-#   DEPENDENCIES builtin_interfaces std_msgs geometry_msgs sensor_msgs
-# )
+# Include directories
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+)
 
 # Install Python scripts
-install(PROGRAMS
+catkin_install_python(PROGRAMS
   scripts/quasi_static_pick_and_place.py
-  scripts/utils.py
-  scripts/ur3e_robot_moveit.py
-  scripts/active_gripper_control.py
+  scripts/rcc_utils.py
+  scripts/panda_robot_moveit.py
+  scripts/panda_gripper_control.py
   scripts/camera_image_retriever.py
   scripts/test_whole_system.py
   scripts/hand_eye_calibrator.py
-  DESTINATION lib/${PROJECT_NAME}
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
+# Install config files
 install(DIRECTORY config
-  DESTINATION share/${PROJECT_NAME}
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
-install(
-  DIRECTORY launch/
-  DESTINATION share/${PROJECT_NAME}/launch
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
 )
 
-
-# Export dependencies
-ament_export_dependencies(rosidl_default_runtime)
-ament_package()

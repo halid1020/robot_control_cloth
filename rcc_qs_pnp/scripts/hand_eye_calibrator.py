@@ -1,47 +1,41 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import os
 import numpy as np
 import cv2
-import rclpy
-from rclpy.node import Node
+import rospy
 import tkinter as tk
 from tkinter import ttk
 from scipy.spatial.transform import Rotation as R
-
 
 ros_version = os.environ.get('ROS_VERSION')
 print('ROS version', ros_version)
 import traceback
 
-
-from utils import  *
+from utils import *
 
 from active_gripper_control import ActiveGripperControl
 from camera_image_retriever import CameraImageRetriever
-from ur3e_robot_moveit import UR3eRobotMoveit
-
+from panda_robot_moveit import FrankaRobotMoveit  # Changed to FrankaRobotMoveit
 
 # Assumption:
-# 1. Robot base frome is the world frame.
+# 1. Robot base frame is the world frame.
 # 2. camera_take_pos is always top-down.
 
-class HandEyeCalibrator(Node):
+class HandEyeCalibrator:
 
     def __init__(self, config):
-        super().__init__('hand_eye_calibrator')
-        #rospy.init_node('quasi_static_pick_and_place', anonymous=True)
+        rospy.init_node('hand_eye_calibrator', anonymous=True)  # ROS 1 Node Initialization
         
         # Initialize MoveIt commander
-        self.logger = self.get_logger()
+        self.logger = rospy.loginfo
 
         self.config = config
 
         self._initialize_robot()
-       
         self._initialize_camera()
 
-        self.logger.info('Finished Initialisation, and ready for experimetns')
+        self.logger('Finished Initialization, and ready for experiments')
 
     def get_workspace_mask(self):
         rgb, depth = self.camera.take_rgbd()
@@ -51,17 +45,17 @@ class HandEyeCalibrator(Node):
         y, x = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
         pixels = np.stack((x.flatten(), y.flatten()), axis=-1)
 
-        self.logger.info(f'pixels shape {pixels.shape}')
+        self.logger(f'pixels shape {pixels.shape}')
 
         # Convert pixels to base coordinates
         base_particles = pixel2base(pixels, self.camera_intrinstic, 
                                     self.camera_pos, [self.camera_height]*pixels.shape[0])
         
-        self.logger.info(f'base particles shape {base_particles.shape}')
+        self.logger(f'base particles shape {base_particles.shape}')
 
         # Check if base_particles are within the workspace region
         distances = np.sqrt(base_particles[:, 0]**2 + base_particles[:, 1]**2)
-        self.logger.info(f'mask distance shape {distances.shape}')
+        self.logger(f'mask distance shape {distances.shape}')
         within_workspace = (distances >= self.work_r) & (distances <= self.work_R)
 
         # Create workspace mask
@@ -76,11 +70,7 @@ class HandEyeCalibrator(Node):
 
         return workspace_mask
 
-
-
-
     def update_calibration(self):
-        
 
         def update_values():
             try:
@@ -90,13 +80,13 @@ class HandEyeCalibrator(Node):
                 
                 self.camera_pos = MyPos(pose=np.array(new_pose), orien=np.array(new_orien))
                 self.camera_height = self.camera_pos.pose[2]
-                self.logger.info("Camera extrinsics updated successfully.")
+                self.logger("Camera extrinsics updated successfully.")
                 self.get_workspace_mask()
                 root.destroy()
             except Exception as e:
-                self.logger.error(f"An unexpected error occurred: {str(e)}")
-                self.logger.error("Stack trace:")
-                self.logger.error(traceback.format_exc())
+                self.logger(f"An unexpected error occurred: {str(e)}")
+                self.logger("Stack trace:")
+                self.logger(traceback.format_exc())
 
         root = tk.Tk()
         root.title("Update Camera Extrinsics")
@@ -134,31 +124,22 @@ class HandEyeCalibrator(Node):
             child.grid_configure(padx=5, pady=5)
 
         root.mainloop()
-            
-    def pixel_pick_touch(self, pick_pixel):
-        
-        
-        estimated_depth = self.camera_height
 
-        
-        self.logger.info(\
-            f"pixel2base pixel {pick_pixel} depth {estimated_depth} intrinsic {self.camera_intrinstic} camera pose {self.camera_pos}")
+    def pixel_pick_touch(self, pick_pixel):
+        estimated_depth = self.camera_height
+        self.logger(f"pixel2base pixel {pick_pixel} depth {estimated_depth} intrinsic {self.camera_intrinstic} camera pose {self.camera_pos}")
         base_pick = pixel2base([pick_pixel], self.camera_intrinstic, 
                                self.camera_pos, estimated_depth)[0]
         base_pick = MyPos(pose=base_pick, orien=self.fix_orien)
-        
-
         base_pick.pose[2] = max(0, base_pick.pose[2]) + self.g2e_offset
-        
         self.execute_pick_touch(base_pick)
-    
-    
+
     def _initialize_gripper(self):
         self.gripper = ActiveGripperControl()
         self.g2e_offset = self.config.g2e_offset
 
     def _initialize_robot(self):
-        self.robot_arm = UR3eRobotMoveit()
+        self.robot_arm = FrankaRobotMoveit()  # Changed to FrankaRobotMoveit
 
         self.ready_joint_states = self.config.ready_joint_states.toDict()
         self.ready_pos = MyPos(
@@ -171,14 +152,12 @@ class HandEyeCalibrator(Node):
         self.work_R = self.config.work_R
         self.work_r = self.config.work_r
 
-
         self._initialize_gripper()
 
         self.pick_raise_offset = self.config.pick_raise_offset
         self.place_raise_offset = self.config.place_raise_offset
 
     def _initialize_camera(self):
-        
         orien = euler_to_quaternion(self.config.camera_orien)
 
         self.camera_pos = MyPos(
@@ -189,27 +168,22 @@ class HandEyeCalibrator(Node):
 
         self.camera = CameraImageRetriever(self.camera_height)
         self.camera_intrinstic = self.camera.get_intrinsic()
-        
 
     def go_home(self):
-        self.logger.info('Going Home')
-        #self.gripper.open()
+        self.logger('Going Home')
         self.robot_arm.go(joint_states=self.home_joint_states)
+        self.logger('Home position reached !!!')
 
-        self.logger.info('Home position reached !!!')
-    
     def go_ready(self):
-        self.logger.info('Going ready')
-        
+        self.logger('Going ready')
         self.robot_arm.go(joint_states=self.ready_joint_states)
-
-        self.logger.info('ready position reached !!!')
+        self.logger('Ready position reached !!!')
 
     def go_pose(self, pose, straight=False):
         self.robot_arm.go(pose=pose)
-        
+
     def execute_pick_touch(self, pick):
-        self.logger.info('Starting Pick {}'.format(pick.pose))
+        self.logger('Starting Pick {}'.format(pick.pose))
 
         # Open Gripper
         self.gripper.grasp()
@@ -217,20 +191,16 @@ class HandEyeCalibrator(Node):
         self.go_ready()
 
         # Go to Pick Position
-        self.logger.info('Going to Pick Position')
+        self.logger('Going to Pick Position')
         pick_raise_pos = pick.pose + np.asarray([0, 0, 0.01])
-        self.go_pose(
-            MyPos(pose=pick_raise_pos, orien=pick.orien), straight=True)
+        self.go_pose(MyPos(pose=pick_raise_pos, orien=pick.orien), straight=True)
 
         # Get pick depth
         pick_pos = pick.pose.copy()
         self.go_pose(MyPos(pose=pick_pos, orien=pick.orien))
 
         # Raise after Pick
-        self.go_pose(
-            MyPos(pose=pick_raise_pos, orien=pick.orien)
-        )
-
+        self.go_pose(MyPos(pose=pick_raise_pos, orien=pick.orien))
 
     def get_pick_pixel(self):
         rgb, depth = self.camera.take_rgbd()
@@ -243,8 +213,7 @@ class HandEyeCalibrator(Node):
                 cv2.imshow('Click Pick Point', rgb)
 
         cv2.imshow('Click Touch Point', rgb)
-        cv2.setMouseCallback('Click Touch Point', 
-                             mouse_callback)
+        cv2.setMouseCallback('Click Touch Point', mouse_callback)
 
         while len(clicks) < 1:
             cv2.waitKey(1)
@@ -252,21 +221,15 @@ class HandEyeCalibrator(Node):
         cv2.destroyAllWindows()
 
         return clicks[0]
-        #place_x, place_y = clicks[1]
-
 
     def run(self):
-        
         self.gripper.grasp()
-        
+
         while True:
             self.update_calibration()
             self.go_home()
             pick_pixel = self.get_pick_pixel()
             self.pixel_pick_touch(pick_pixel)
-            
-
-
 
 
 if __name__ == '__main__':
@@ -275,14 +238,11 @@ if __name__ == '__main__':
     # Load configuration from the YAML file
     config = load_config(config_name)
 
+    rospy.init_node('hand_eye_calibrator')
 
-    rclpy.init()
-    
-    # Initialize QuasiStaticPickAndPlace with the loaded configuration
+    # Initialize HandEyeCalibrator with the loaded configuration
     calibrator = HandEyeCalibrator(config=config)
 
     calibrator.run()
-    
 
-
-    rclpy.shutdown()
+    rospy.spin()  # To keep the node alive

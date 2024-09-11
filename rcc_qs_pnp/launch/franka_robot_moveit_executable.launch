@@ -1,0 +1,17 @@
+<launch>
+  <!-- Step 1: Launch Franka's control system -->
+  <include file="$(find rcc_qs_pnp)/launch/franka_control.launch">
+    <arg name="robot_ip" value="172.22.2.4"/>
+    <arg name="arm_id" value="bob"/>
+    <arg name="load_gripper" value="true"/>
+  </include>
+
+  <!-- Step 2: Launch ROS controllers -->
+  <include file="$(find rcc_qs_pnp)/launch/ros_controllers.launch"/>
+
+  <!-- Step 3: Launch MoveIt move_group -->
+  <include file="$(find rcc_qs_pnp)/launch/move_group.launch"/>
+   <!-- Step 4: Launch RViz for MoveIt visualization -->
+  <node name="rviz" pkg="rviz" type="rviz" required="true" output="screen"
+        args="-d $(find rcc_qs_pnp)/config/moveit.rviz"/>
+</launch>

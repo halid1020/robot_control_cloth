@@ -11,7 +11,4 @@
 
   <!-- Step 3: Launch MoveIt move_group -->
   <include file="$(find rcc_qs_pnp)/launch/move_group.launch"/>
-   <!-- Step 4: Launch RViz for MoveIt visualization -->
-  <node name="rviz" pkg="rviz" type="rviz" required="true" output="screen"
-        args="-d $(find rcc_qs_pnp)/config/moveit.rviz"/>
 </launch>

@@ -12,9 +12,9 @@ ros_version = os.environ.get('ROS_VERSION')
 print('ROS version', ros_version)
 import traceback
 
-from utils import *
+from rcc_utils import *
 
-from active_gripper_control import ActiveGripperControl
+from panda_gripper_control import PandaGripperControl
 from camera_image_retriever import CameraImageRetriever
 from panda_robot_moveit import FrankaRobotMoveit  # Changed to FrankaRobotMoveit
 
@@ -25,7 +25,7 @@ from panda_robot_moveit import FrankaRobotMoveit  # Changed to FrankaRobotMoveit
 class HandEyeCalibrator:
 
     def __init__(self, config):
-        rospy.init_node('hand_eye_calibrator', anonymous=True)  # ROS 1 Node Initialization
+        # rospy.init_node('hand_eye_calibrator', anonymous=True)  # ROS 1 Node Initialization
         
         # Initialize MoveIt commander
         self.logger = rospy.loginfo
@@ -78,7 +78,15 @@ class HandEyeCalibrator:
                 new_euler = [float(euler_entries[i].get()) for i in range(3)]
                 new_orien = euler_to_quaternion(new_euler)
                 
-                self.camera_pos = MyPos(pose=np.array(new_pose), orien=np.array(new_orien))
+                # curr_pos = np.asarray([pose.x,pose.y,pose.z])
+                curr_pos = self.home_pose
+                print(f"Curent end effector pose {curr_pos}")
+                self.camera_offset = np.asarray(new_pose)
+                print(f"Camera offset {self.camera_offset}")
+                self.camera_pose = curr_pos + self.camera_offset
+                self.camera_pos = MyPos(pose=self.camera_pose, orien=normalise_quaterion(new_orien))
+
+                
                 self.camera_height = self.camera_pos.pose[2]
                 self.logger("Camera extrinsics updated successfully.")
                 self.get_workspace_mask()
@@ -100,7 +108,7 @@ class HandEyeCalibrator:
         for i in range(3):
             ttk.Label(frame, text=f"X{i+1}:").grid(column=0, row=i+1, sticky=tk.E)
             entry = ttk.Entry(frame, width=10)
-            entry.insert(0, f"{self.camera_pos.pose[i]:.6f}")
+            entry.insert(0, f"{self.camera_offset[i]:.6f}")
             entry.grid(column=1, row=i+1, sticky=(tk.W, tk.E))
             pose_entries.append(entry)
 
@@ -132,20 +140,24 @@ class HandEyeCalibrator:
                                self.camera_pos, estimated_depth)[0]
         base_pick = MyPos(pose=base_pick, orien=self.fix_orien)
         base_pick.pose[2] = max(0, base_pick.pose[2]) + self.g2e_offset
+        print(f"Base pose value {base_pick.pose}")
+        print(f"Camera offser {self.camera_offset}")
+        print(f"camera pose {self.camera_pos}")
         self.execute_pick_touch(base_pick)
 
     def _initialize_gripper(self):
-        self.gripper = ActiveGripperControl()
+        self.gripper = PandaGripperControl()
         self.g2e_offset = self.config.g2e_offset
 
     def _initialize_robot(self):
         self.robot_arm = FrankaRobotMoveit()  # Changed to FrankaRobotMoveit
 
         self.ready_joint_states = self.config.ready_joint_states.toDict()
-        self.ready_pos = MyPos(
-            pose=self.config.eff_ready_pose,
-            orien=normalise_quaterion(self.config.eff_ready_orien)
-        )
+        self.ready_pos = list(self.config.ready_pos)
+        # self.ready_pos = MyPos(
+        #     pose=self.config.eff_ready_pose,
+        #     orien=normalise_quaterion(self.config.eff_ready_orien)
+        # )
         self.home_joint_states = self.config.home_joint_states.toDict()
         self.fix_orien = normalise_quaterion(self.config.eff_ready_orien)
 
@@ -159,11 +171,29 @@ class HandEyeCalibrator:
 
     def _initialize_camera(self):
         orien = euler_to_quaternion(self.config.camera_orien)
+        self.go_home()
+        # Retrieve current pose from the robot
+        pose_stamped = self.robot_arm.get_current_pose()  # Get structured pose information
+        # self.home_posestamp = pose_stamped.copy()
 
-        self.camera_pos = MyPos(
-            pose=self.config.camera_pose,
-            orien=orien
-        )
+        # rospy.loginfo(f"Current pose_stamped: {pose_stamped}")  # Print debug information
+
+        # Access position and orientation directly
+        pose = pose_stamped.position
+        orientation = pose_stamped.orientation
+        
+        curr_pos = np.asarray([pose.x,pose.y,pose.z])
+        self.home_pose = curr_pos.copy()
+        print(f"Curent end effector pose {curr_pos}")
+        self.camera_offset = np.asarray(self.config.camera_pose)
+        print(f"Camera offset {self.camera_offset}")
+        self.camera_pose = curr_pos + self.camera_offset
+        self.camera_pos = MyPos(pose=self.camera_pose, orien=normalise_quaterion(orien))
+
+        # self.camera_pos = MyPos(
+        #     pose=self.config.camera_pose,
+        #     orien=orien
+        # )
         self.camera_height = self.config.camera_pose[2]
 
         self.camera = CameraImageRetriever(self.camera_height)
@@ -175,12 +205,13 @@ class HandEyeCalibrator:
         self.logger('Home position reached !!!')
 
     def go_ready(self):
-        self.logger('Going ready')
+        self.logger('Going to ready position')
         self.robot_arm.go(joint_states=self.ready_joint_states)
-        self.logger('Ready position reached !!!')
+        self.logger('Ready position reached')
+        self.robot_arm.go(MyPos(pose=self.ready_pos, orien=self.fix_orien),straight=True)
 
     def go_pose(self, pose, straight=False):
-        self.robot_arm.go(pose=pose)
+        self.robot_arm.go(pose=pose,straight=straight)
 
     def execute_pick_touch(self, pick):
         self.logger('Starting Pick {}'.format(pick.pose))
@@ -223,10 +254,13 @@ class HandEyeCalibrator:
         return clicks[0]
 
     def run(self):
+        self.go_home()
         self.gripper.grasp()
 
         while True:
+            print("Before update calibration")
             self.update_calibration()
+            print("After update calibration")
             self.go_home()
             pick_pixel = self.get_pick_pixel()
             self.pixel_pick_touch(pick_pixel)
@@ -234,7 +268,7 @@ class HandEyeCalibrator:
 
 if __name__ == '__main__':
     # Check if a config name is provided as a command-line argument
-    config_name = "ur3e_active_realsense_standrews"  # Use a default config name if none is provided
+    config_name = "panda_original_realsense_nottingham"  # Use a default config name if none is provided
     # Load configuration from the YAML file
     config = load_config(config_name)
 
@@ -245,4 +279,4 @@ if __name__ == '__main__':
 
     calibrator.run()
 
-    rospy.spin()  # To keep the node alive
+    # rospy.spin()  # To keep the node alive

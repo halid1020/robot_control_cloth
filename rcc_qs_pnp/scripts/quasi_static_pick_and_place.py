@@ -102,6 +102,7 @@ class QuasiStaticPickAndPlace:
         base_pick = MyPos(pose=base_pick, orien=orien)
         base_place = pixel2base([place_pixel], self.camera_intrinstic, self.camera_pos, self.camera_height)[0]
         base_place = MyPos(pose=base_place, orien=orien)
+        print(f"Camera pose value{self.camera_pos}")
         print(f"Calculated base pick {base_pick}, base place {base_place}")
         base_pick.pose[2] = max(0, base_pick.pose[2]) + self.g2e_offset
         base_place.pose[2] += self.g2e_offset
@@ -138,7 +139,7 @@ class QuasiStaticPickAndPlace:
         camera_orien = euler_to_quaternion(list(self.config.camera_orien))
         # pose = self.robot_arm.get_current_pose().pose # Retrieve current pose
         # Retrieve current pose from the robot
-        
+        self.go_home()
         # Retrieve current pose from the robot
         pose_stamped = self.robot_arm.get_current_pose()  # Get structured pose information
         # rospy.loginfo(f"Current pose_stamped: {pose_stamped}")  # Print debug information
@@ -146,9 +147,11 @@ class QuasiStaticPickAndPlace:
         # Access position and orientation directly
         pose = pose_stamped.position
         orientation = pose_stamped.orientation
-
+        
         curr_pos = np.asarray([pose.x,pose.y,pose.z])
+        print(f"Curent end effector pose {curr_pos}")
         self.camera_offset = np.asarray(self.config.camera_pose)
+        print(f"Camera offset {self.camera_offset}")
         self.camera_pose = curr_pos + self.camera_offset
         self.camera_pos = MyPos(pose=self.camera_pose, orien=normalise_quaterion(camera_orien))
         self.camera_height = self.camera_pose[2]

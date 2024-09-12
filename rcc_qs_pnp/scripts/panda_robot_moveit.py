@@ -33,22 +33,37 @@ class FrankaRobotMoveit:
 
         self.logger('Finished initializing Franka Robot MoveIt interface')
 
-    def go(self, pose=None, name=None, joint_states=None):
+    def get_current_pose(self):
+        """Get the current pose of the end-effector."""
+        return self.group.get_current_pose().pose
+
+    def go(self, pose=None, name=None, joint_states=None, straight = False):
         # Clear previously set targets
         self.group.clear_pose_targets()
 
         if name:
             self.logger(f'Setting named target: {name}')
             self.group.set_named_target(name)
+            self.plan_and_execute()
         elif pose:
             self.logger(f'Setting pose target: {pose}')
             pose_stamped = prepare_posestamped(pose, frame_id=self.planning_frame)
             self.group.set_pose_target(pose_stamped)
+            if straight:
+                (plan, fraction) = self.group.compute_cartesian_path(
+                                    [pose_stamped.pose],   # waypoints to follow
+                                    0.01,        # eef_step
+                                    0.0)
+                success = self.group.execute(plan, wait=True)
         elif joint_states:
             self.logger(f'Setting joint state target: {joint_states}')
             self.group.set_joint_value_target(joint_states)
+            self.plan_and_execute()
+        self.group.stop()
+        self.group.clear_pose_targets()
 
-        self.plan_and_execute()
+
+
 
     def plan_and_execute(self):
         self.logger('Planning...')

@@ -22,16 +22,17 @@ ready_joint_states:
   bob_joint5: 0.0
   bob_joint6: 1.571
   bob_joint7: 0.785
-  
+
+ready_pos: [0.5, 0, 0.6] 
 eff_home_pos: [0.5, 0, 0.6] # x, y, z for end-effector
 arm_group: "bob_arm"
 base_link: "bob_link0"
 effector_link: "bob_link8"
 eff_default_orien: [0.9237820580963242, -0.38291837679374485, 7.93796317786616e-05, 0.0004685635894043005]
 
-eff_ready_pose:  [-0.16, -0.13, 0.5]   # x, y, z for end-effector
-eff_ready_orien: [0.70, 0.70, 0.0, 0.0]
-fix_orien: [0.70, 0.70, 0.0, 0.0]
+eff_ready_pose:  [-0.16, -0.13, 0.55]   # x, y, z for end-effector -0.16, -0.13, 0.5
+eff_ready_orien: [0.9237820580963242, -0.38291837679374485, 7.93796317786616e-05, 0.0004685635894043005]  #0.70, 0.70, 0.0, 0.0
+fix_orien: [0.9237820580963242, -0.38291837679374485, 7.93796317786616e-05, 0.0004685635894043005] #0.70, 0.70, 0.0, 0.0
 work_R: 0.52
 work_r: 0.24
 
@@ -60,7 +61,7 @@ g2e_offset: 0.1879
 ## Camera Config ##
 ###################
 camera_pose: [-0.125, -0.127, -0.04]
-camera_orien: [180.0, 0.000000, 89.500000] # Euler system in degree.
+camera_orien: [-180.0, 0, -90] #[180.0, 0.000000, 89.500000] # Euler system in degree.
 
 
 # CAUTION!!! following values need to be calibrations using hand-eye-calibration

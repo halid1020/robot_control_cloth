@@ -97,13 +97,12 @@ class QuasiStaticPickAndPlace:
             estimated_depth = min(np.median(depth_values) + 0.02, self.camera_height)
             self.logger(f"Estimated pick depth {estimated_depth}")
 
-        self.logger(f"Pixel to base conversion, pixel {pick_pixel} depth {estimated_depth}")
+        print(f"Pixel to base conversion, pixel {pick_pixel} depth {estimated_depth}")
         base_pick = pixel2base([pick_pixel], self.camera_intrinstic, self.camera_pos, [estimated_depth])[0]
         base_pick = MyPos(pose=base_pick, orien=orien)
         base_place = pixel2base([place_pixel], self.camera_intrinstic, self.camera_pos, self.camera_height)[0]
         base_place = MyPos(pose=base_place, orien=orien)
-        self.logger(f"Calculated base pick {base_pick}, base place {base_place}")
-
+        print(f"Calculated base pick {base_pick}, base place {base_place}")
         base_pick.pose[2] = max(0, base_pick.pose[2]) + self.g2e_offset
         base_place.pose[2] += self.g2e_offset
         self.execute_pick_and_place(base_pick, base_place)
@@ -114,11 +113,20 @@ class QuasiStaticPickAndPlace:
 
     def _initialize_robot(self):
         self.robot_arm = FrankaRobotMoveit()
-
+        self.ready_pos = list(self.config.ready_pos)
         self.ready_joint_states = self.config.ready_joint_states.toDict()
-        self.ready_pos = MyPos(pose=self.config.eff_ready_pose, orien=normalise_quaterion(self.config.eff_ready_orien))
+        # self.ready_pos = MyPos(pose=self.config.eff_ready_pose, orien=normalise_quaterion(self.config.eff_ready_orien))
         self.home_joint_states = self.config.home_joint_states.toDict()
         self.fix_orien = normalise_quaterion(self.config.eff_ready_orien)
+
+        # Add IK tolerance to allow for approximate solutions
+        # self.robot_arm.group.set_goal_position_tolerance(0.01)  # 1 cm tolerance in position
+        # self.robot_arm.group.set_goal_orientation_tolerance(0.05)  # 5% tolerance in orientation
+        # self.robot_arm.group.set_num_planning_attempts(10)  # Increase number of planning attempts
+        # self.robot_arm.group.set_planning_time(10.0)  # Increase planning time to 10 seconds
+        # Switch to a different planner
+        # self.robot_arm.group.set_planning_pipeline_id('ompl')
+        # self.robot_arm.group.set_planner_id('RRTConnectkConfigDefault')
 
         self._initialize_gripper()
 
@@ -128,10 +136,20 @@ class QuasiStaticPickAndPlace:
 
     def _initialize_camera(self):
         camera_orien = euler_to_quaternion(list(self.config.camera_orien))
-        pose = self.robot_arm.get_current_pose().pose  # Retrieve current pose
-        self.home_pos = np.asarray([pose.position.x,pose.position.y,pose.position.z])
+        # pose = self.robot_arm.get_current_pose().pose # Retrieve current pose
+        # Retrieve current pose from the robot
+        
+        # Retrieve current pose from the robot
+        pose_stamped = self.robot_arm.get_current_pose()  # Get structured pose information
+        # rospy.loginfo(f"Current pose_stamped: {pose_stamped}")  # Print debug information
+
+        # Access position and orientation directly
+        pose = pose_stamped.position
+        orientation = pose_stamped.orientation
+
+        curr_pos = np.asarray([pose.x,pose.y,pose.z])
         self.camera_offset = np.asarray(self.config.camera_pose)
-        self.camera_pose = self.home_pos + self.camera_offset
+        self.camera_pose = curr_pos + self.camera_offset
         self.camera_pos = MyPos(pose=self.camera_pose, orien=normalise_quaterion(camera_orien))
         self.camera_height = self.camera_pose[2]
         self.camera = CameraImageRetriever(self.camera_height)
@@ -147,9 +165,10 @@ class QuasiStaticPickAndPlace:
         self.logger('Going to ready position')
         self.robot_arm.go(joint_states=self.ready_joint_states)
         self.logger('Ready position reached')
+        self.robot_arm.go(MyPos(pose=self.ready_pos, orien=self.fix_orien),straight=True)
 
     def go_pose(self, pose, straight=False):
-        self.robot_arm.go(pose=pose)
+        self.robot_arm.go(pose=pose,straight=straight)
 
     def get_pick_depth(self):
         _, depth_img = self.camera.take_rgbd()
@@ -171,19 +190,19 @@ class QuasiStaticPickAndPlace:
         pick_raise_pos = pick.pose + np.asarray([0, 0, self.pick_raise_offset])
         self.go_pose(MyPos(pose=pick_raise_pos, orien=pick.orien), straight=True)
         pick_pos = pick.pose.copy()
-        self.go_pose(MyPos(pose=pick_pos, orien=pick.orien))
+        self.go_pose(MyPos(pose=pick_pos, orien=pick.orien),straight=False)
         self.gripper.grasp()
-        self.go_pose(MyPos(pose=pick_raise_pos, orien=pick.orien))
+        self.go_pose(MyPos(pose=pick_raise_pos, orien=pick.orien),straight=False)
 
-        current_pos = pick_raise_pos
+        # current_pos = pick_raise_pos
         place_raise_pos = place.pose + np.asarray([0, 0, self.place_raise_offset])
-        direction = (place_raise_pos - current_pos) / np.linalg.norm(place_raise_pos - current_pos)
-        for step in range(int(np.linalg.norm(place_raise_pos - current_pos) / 0.2)):
-            intermediate_pos = current_pos + direction * 0.2 * (step + 1)
-            self.go_pose(MyPos(pose=intermediate_pos, orien=place.orien), straight=True)
+        # direction = (place_raise_pos - current_pos) / np.linalg.norm(place_raise_pos - current_pos)
+        # for step in range(int(np.linalg.norm(place_raise_pos - current_pos) / 0.2)):
+        #     intermediate_pos = current_pos + direction * 0.2 * (step + 1)
+        #     self.go_pose(MyPos(pose=intermediate_pos, orien=place.orien), straight=True)
         self.go_pose(MyPos(pose=place_raise_pos, orien=place.orien), straight=True)
-        self.gripper.open()
-        self.gripper.grasp()
+        # self.gripper.open()
+        # self.gripper.grasp()
         self.gripper.open()
 
     def _crop_image(self, image, annotation=False):
@@ -280,11 +299,11 @@ class QuasiStaticPickAndPlace:
 
     def test_world_pick_and_place(self):
         self.go_home()
-        pick = MyPos(pose=[0.2, 0.2, self.config.g2e_offset], orien=self.fix_orien)
-        place = MyPos(pose=[0.3, 0.3, self.config.g2e_offset], orien=self.fix_orien)
+        pick = MyPos(pose=[0.5, 0.1, self.config.g2e_offset], orien=self.fix_orien) # positive direction of x axis is the front of the base
+        place = MyPos(pose=[0.5, -0.1, self.config.g2e_offset], orien=self.fix_orien)# positive direction of y axis is left side of the base.
         self.execute_pick_and_place(pick, place)
 
-    def test_pixel_pick_and_place(self, pixel_pnp=[-1, -1, -1, -1], random=False):
+    def test_pixel_pick_and_place(self, pixel_pnp=[-1, -1, 1 , 1], random=False):
         self.go_home()
         self.take_cropped_rgbd()
 
@@ -324,4 +343,5 @@ if __name__ == '__main__':
     # qspnp.test_world_pick_and_place()
     # qspnp.test_camera(crop=True)
     qspnp.test_pixel_pick_and_place()
+    # qspnp.test_world_pick_and_place()
     # qspnp.run()

@@ -143,6 +143,7 @@ class HandEyeCalibrator:
         print(f"Base pose value {base_pick.pose}")
         print(f"Camera offser {self.camera_offset}")
         print(f"camera pose {self.camera_pos}")
+        print(f"Pick Pixel{pick_pixel}")
         self.execute_pick_touch(base_pick)
 
     def _initialize_gripper(self):
@@ -216,10 +217,8 @@ class HandEyeCalibrator:
     def execute_pick_touch(self, pick):
         self.logger('Starting Pick {}'.format(pick.pose))
 
-        # Open Gripper
-        self.gripper.grasp()
-
         self.go_ready()
+        self.gripper.grasp()
 
         # Go to Pick Position
         self.logger('Going to Pick Position')
@@ -241,14 +240,14 @@ class HandEyeCalibrator:
             if event == cv2.EVENT_LBUTTONDOWN:
                 clicks.append((x, y))
                 cv2.circle(rgb, (x, y), 5, (0, 255, 0), -1)
-                cv2.imshow('Click Pick Point', rgb)
+                cv2.imshow('Click Touch Point', rgb)
 
         cv2.imshow('Click Touch Point', rgb)
         cv2.setMouseCallback('Click Touch Point', mouse_callback)
 
         while len(clicks) < 1:
             cv2.waitKey(1)
-
+        print("Finish clicking")
         cv2.destroyAllWindows()
 
         return clicks[0]

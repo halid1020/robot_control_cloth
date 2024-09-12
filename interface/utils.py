@@ -9,7 +9,6 @@ from collections import namedtuple
 from dotmap import DotMap   
 import yaml
 import os
-from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import PoseStamped
 import cv2
 from scipy.ndimage import distance_transform_edt
@@ -25,7 +24,7 @@ import subprocess
 import shlex
 from scipy.ndimage import rotate, shift
 from skimage.measure import label, regionprops
-
+from rospkg import RosPack
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
 
@@ -140,11 +139,16 @@ def get_mask_v2(mask_generator, rgb):
             #save_mask(orginal_mask, f'mask_candidate_{i}')
             
             # Select the mask with the maximum color difference from the background
-            mask_region_size = np.sum(segmentation_mask == 255)
+            #mask_region_size = np.sum(segmentation_mask == 255)
+            
 
             if mask_corner_value >= 2:
                 # if the mask has more than 2 corners, the flip the value
                 orginal_mask = 1 - orginal_mask
+            
+            mask_region_size = np.sum(orginal_mask == 1)
+            if mask_region_size > 160000:
+                continue
 
             mask_data.append({
                 'mask': orginal_mask,
@@ -152,14 +156,109 @@ def get_mask_v2(mask_generator, rgb):
                 'mask_region_size': mask_region_size,
             })
         
-        top_5_masks = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[:5]
+        top_5_masks = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[:3]
         final_mask_data = sorted(top_5_masks, key=lambda x: x['mask_region_size'], reverse=True)[0]
         final_mask = final_mask_data['mask']
+
+        ## print the average color of the mask background
+        masked_region = np.expand_dims(final_mask, -1) * rgb
+        background_region = (1 - np.expand_dims(final_mask, -1)) * rgb
+        masked_pixels = masked_region[final_mask == 1]
+        avg_masked_color = np.mean(masked_pixels, axis=0)
+        background_pixels = background_region[final_mask == 0]
+        avg_background_color = np.mean(background_pixels, axis=0)
+        print(f'avg_masked_color {avg_masked_color} avg_background_color {avg_background_color}')
         
         #save_mask(final_mask, 'final_mask')
         print('Final mask generated.')
 
         return final_mask
+
+def get_mask_v1(mask_generator, rgb):
+    ## similar as get_mask_v2, but only get the top_1 mask
+    results = mask_generator.generate(rgb)
+        
+    final_mask = None
+    max_color_difference = 0
+    print('Processing mask results...')
+    save_color(rgb, 'rgb')
+    mask_data = []
+
+    # Iterate over each generated mask result
+    for i, result in enumerate(results):
+        segmentation_mask = result['segmentation']
+        mask_shape = rgb.shape[:2]
+
+        ## count no mask corner of the mask
+        margin = 5
+        mask_corner_value = 1.0*segmentation_mask[margin, margin] + 1.0*segmentation_mask[margin, -margin] + \
+                            1.0*segmentation_mask[-margin, margin] + 1.0*segmentation_mask[-margin, -margin]
+        
+        
+
+        #print('mask corner value', mask_corner_value)
+        # Ensure the mask is in the correct format
+        orginal_mask = segmentation_mask.copy()
+        segmentation_mask = segmentation_mask.astype(np.uint8) * 255
+        
+        # Calculate the masked region and the background region
+        masked_region = cv2.bitwise_and(rgb, rgb, mask=segmentation_mask)
+        background_region = cv2.bitwise_and(rgb, rgb, mask=cv2.bitwise_not(segmentation_mask))
+        
+        # Calculate the average color of the masked region
+        masked_pixels = masked_region[segmentation_mask == 255]
+        if masked_pixels.size == 0:
+            continue
+        avg_masked_color = np.mean(masked_pixels, axis=0)
+        
+        # Calculate the average color of the background region
+        background_pixels = background_region[segmentation_mask == 0]
+        if background_pixels.size == 0:
+            continue
+        avg_background_color = np.mean(background_pixels, axis=0)
+        
+        # Calculate the Euclidean distance between the average colors
+        color_difference = np.linalg.norm(avg_masked_color - avg_background_color)
+        #print(f'color difference {i} color_difference {color_difference}')
+        #save_mask(orginal_mask, f'mask_candidate_{i}')
+        
+        # Select the mask with the maximum color difference from the background
+        #mask_region_size = np.sum(segmentation_mask == 255)
+        
+
+        if mask_corner_value >= 2:
+            # if the mask has more than 2 corners, the flip the value
+            orginal_mask = 1 - orginal_mask
+        
+        mask_region_size = np.sum(orginal_mask == 1)
+        if mask_region_size > 160000:
+            continue
+
+        mask_data.append({
+            'mask': orginal_mask,
+            'color_difference': color_difference,
+            'mask_region_size': mask_region_size,
+        })
+    
+    final_mask = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[0]['mask']
+    
+    #save_mask(final_mask, 'final_mask')
+    print('Final mask generated.')
+
+    return final_mask
+
+def get_mask_v0(rgb):
+    ### segment the region that is under the threshold
+    ## rgb in shape H, W, 3
+
+    threshold = [105, 105, 105]
+    mask = np.ones((rgb.shape[0], rgb.shape[1]))
+    for i in range(rgb.shape[0]):
+        for j in range(rgb.shape[1]):
+            if np.all(rgb[i, j] < threshold):
+                mask[i, j] = 0
+    return mask
+
 
 def start_ffmpeg_recording(output_file, device='/dev/video6', resolution='1920x1080', framerate=30):
     """
@@ -365,7 +464,9 @@ def normalise_quaterion(q):
     return q / norm
 
 def load_config(config_name):
-    config_dir = os.path.join(get_package_share_directory('robot_control_cloth'), 'config')
+    rospack = RosPack()
+    # config_dir = os.path.join(get_package_share_directory('robot_control_cloth'), 'config')
+    config_dir = os.path.join(rospack.get_path('robot_control_cloth'), 'config')
     config_file_path = os.path.join(config_dir, f"{config_name}.yaml")
     with open(config_file_path, 'r') as file:
         config_dict = yaml.safe_load(file)

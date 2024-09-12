@@ -193,9 +193,9 @@ class QuasiStaticPickAndPlace:
         pick_raise_pos = pick.pose + np.asarray([0, 0, self.pick_raise_offset])
         self.go_pose(MyPos(pose=pick_raise_pos, orien=pick.orien), straight=True)
         pick_pos = pick.pose.copy()
-        self.go_pose(MyPos(pose=pick_pos, orien=pick.orien),straight=False)
+        self.go_pose(MyPos(pose=pick_pos, orien=pick.orien),straight=True)
         self.gripper.grasp()
-        self.go_pose(MyPos(pose=pick_raise_pos, orien=pick.orien),straight=False)
+        self.go_pose(MyPos(pose=pick_raise_pos, orien=pick.orien),straight=True)
 
         # current_pos = pick_raise_pos
         place_raise_pos = place.pose + np.asarray([0, 0, self.place_raise_offset])
@@ -345,6 +345,6 @@ if __name__ == '__main__':
     qspnp = QuasiStaticPickAndPlace(config=config, mock=False)
     # qspnp.test_world_pick_and_place()
     # qspnp.test_camera(crop=True)
-    qspnp.test_pixel_pick_and_place()
+    # qspnp.test_pixel_pick_and_place()
     # qspnp.test_world_pick_and_place()
-    # qspnp.run()
+    qspnp.run()

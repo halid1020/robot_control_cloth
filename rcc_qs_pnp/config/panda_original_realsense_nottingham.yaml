@@ -60,8 +60,8 @@ g2e_offset: 0.1879
 ###################
 ## Camera Config ##
 ###################
-camera_pose: [0.2, 0.1, -0.04]
-camera_orien: [-180.0, 0, 180] #[180.0, 0.000000, 89.500000] # Euler system in degree.
+camera_pose: [0.052, 0.041, -0.03]
+camera_orien: [-180.0, 0, 270] #[180.0, 0.000000, 89.500000] # Euler system in degree.
 
 
 # CAUTION!!! following values need to be calibrations using hand-eye-calibration
@@ -71,9 +71,9 @@ camera_setup: "eye-in-hand"
 #   orien: [7.93796318e-05, -4.68563589e-04, -9.23782058e-01,  3.82918377e-01] ## target will be [0, 1, 0, 0]
 
 load_intrinsic: "from_camera"
-crop_resol: 450
-crop_start_x: 500
-crop_start_y: 50
+crop_resol: 400
+crop_start_x: 650
+crop_start_y: 0
 
 
 ############################

@@ -26,6 +26,7 @@ class FrankaRobotMoveit:
         self.group.set_pose_reference_frame("bob_link0")
         self.group.set_end_effector_link("bob_link8")
         self.planning_frame = self.group.get_planning_frame()
+        self.group.set_planning_time(3.0)  # Increase planning time to 10 seconds
 
         # Logger
         self.logger = rospy.loginfo

@@ -27,6 +27,7 @@ class AgentArenaInterface(ControlInterface):
         super(AgentArenaInterface, self).__init__(task, steps=steps, adjust_pick=adjust_pick,
                                                   name='agent', adjust_orien=adjust_orien,save_dir=save_dir)
         self.agent = agent
+        self.adjust_orien = adjust_orien
         self.save_dir = './agent_data/{}-{}-{}-{}'.format(task, agent.name, config_name, checkpoint)
         os.makedirs(self.save_dir, exist_ok=True)
         self.depth_sim2real = depth_sim2real
@@ -36,22 +37,26 @@ class AgentArenaInterface(ControlInterface):
 
     def save_step(self, state):
         super().save_step(state)
+        
         rgb = state['observation']['rgb']
         save_dir = os.path.join(self.save_dir, self.trj_name, f'step_{str(self.step)}')
+        
         alpha = 0.7
-
         if 'masked-pick-heat' in state:
+            
             pick_heat = state['masked-pick-heat'].copy()
             pick_heat = cv2.resize(pick_heat, rgb.shape[:2])
+            
             pick_heat = alpha * pick_heat + (1 - alpha) * rgb
-            cv2.imwrite('{}/pick-heat.png'.format(save_dir), pick_heat)
+            cv2.imwrite('{}/pick-heat.png'.format(save_dir,self.step), pick_heat)
             cv2.imwrite('tmp/pick-heat.png', pick_heat)
 
         if 'place-heat-chosen-pick' in state:
+            
             pick_heat = state['place-heat-chosen-pick'].copy()
             pick_heat = cv2.resize(pick_heat, rgb.shape[:2])
             pick_heat = alpha * pick_heat + (1 - alpha) * rgb
-            cv2.imwrite('{}/place-heat.png'.format(save_dir), pick_heat)
+            cv2.imwrite('{}/place-heat.png'.format(save_dir,self.step), pick_heat)
             cv2.imwrite('tmp/place-heat.png', pick_heat)
 
     def act(self, state):
@@ -101,26 +106,38 @@ class AgentArenaInterface(ControlInterface):
             mask = get_mask_v2(self.mask_generator, rgb)
 
         rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+
+        ### Alert !!! map the depth from 0 (shallowest) to 1 (deepest)
+        ### background are 1s.
+        ### the agent needs to do the adjustment according! 
+        
         if self.depth_sim2real in ['v1', 'v2']:
-            norm_depth = (depth - np.min(depth)) / ((np.max(depth)) - np.min(depth))
+            norm_depth = (depth - np.min(depth))/((np.max(depth)) - np.min(depth))
             masked_depth = norm_depth * mask
             new_depth = np.ones_like(masked_depth)
-            new_depth = new_depth * (1 - mask) + masked_depth
+            depth = new_depth * (1 - mask) + masked_depth
+        
         elif self.depth_sim2real == 'v0':
             depth += (self.sim_camera_height - self.real_camera_height)
-            
+            masked_depth = depth * mask
+            new_depth = np.ones_like(masked_depth) * self.sim_camera_height
+            depth = new_depth * (1 - mask) + masked_depth
+
+        
+        # save_depth(new_depth, filename='post_depth.png', directory="./tmp")
+        # #cv2.imwrite('tmp/depth.png', (depth*255).astype(np.int8))
+        # cv2.imwrite('tmp/mask.png', mask.astype(np.uint8)*255)
 
         state = {
             'observation': {
                 'rgb': rgb.copy(),
-                'depth': new_depth.copy(),
+                'depth': depth.copy(),
                 'mask': mask.copy()
             },
             'action_space': Box(
                 -np.ones((1, 4)).astype(np.float32),
                 np.ones((1, 4)).astype(np.float32),
-                dtype=np.float32
-            ),
+                dtype=np.float32),
             'sim2real': True,
             'task': self.task
         }
@@ -131,6 +148,7 @@ class AgentArenaInterface(ControlInterface):
             state['observation']['full_mask'] = full_mask
             raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb
+
 
         return state
 
@@ -144,7 +162,7 @@ def parse_arguments():
     parser.add_argument('--agent', default='transporter')
     parser.add_argument('--config', default='MJ-TN-2000-rgb-maskout-rotation-90')
     parser.add_argument('--log_dir', default='/home/ah01/Data')
-    parser.add_argument('--save_dir', default='/data/sim2real')
+    parser.add_argument('--save_dir', default='/home/ah01/Projects/sim2real')
     parser.add_argument('--eval_checkpoint', default=-1, type=int)
 
     parser.add_argument('--depth_sim2real', default='v2')

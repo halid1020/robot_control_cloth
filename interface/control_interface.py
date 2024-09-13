@@ -59,28 +59,64 @@ class ControlInterface:
 
     def _save_step(self, state, save_dir):
         rgb = state['observation']['rgb']
-        raw_rgb = state['observation']['raw_rgb']
-        full_mask = state['observation']['full_mask']
+        
+        
         depth = state['observation']['depth']
         mask = state['observation']['mask']
+        
 
         os.makedirs(save_dir, exist_ok=True)
         print('rgb shape', rgb.shape)
         save_color(rgb, filename='rgb', directory=save_dir)
-        save_color(raw_rgb, filename='raw_rgb', directory=save_dir)
+        
         save_depth(depth, filename='depth', directory=save_dir)
         save_depth(depth, filename='colour_depth', directory=save_dir, colour=True)
         save_mask(mask, filename='mask', directory=save_dir)
-        save_mask(full_mask, filename='full_mask', directory=save_dir)
+        
+        if 'full_mask' in state['observation']:
+            full_mask = state['observation']['full_mask']
+            save_mask(full_mask, filename='full_mask', directory=save_dir)
+
+        if 'mask_v2' in state['observation']:
+            mask_v2 = state['observation']['mask_v2']
+            save_mask(mask_v2, filename='mask_v2', directory=save_dir)
+        
+        if 'mask_v1' in state['observation']:
+            mask_v1 = state['observation']['mask_v1']
+            save_mask(mask_v1, filename='mask_v1', directory=save_dir)
+        
+        if 'mask_v0' in state['observation']:
+            mask_v0 = state['observation']['mask_v0']
+            save_mask(mask_v0, filename='mask_v0', directory=save_dir)
+
+        if 'raw_rgb' in state['observation']:
+            raw_rgb = state['observation']['raw_rgb']
+            save_color(raw_rgb, filename='raw_rgb', directory=save_dir)
+
+        # if 'input_obs' in state:
+        #     input_obs = state['input_obs']
+        #     input_type = state['input_type']
+        #     print('input_obs', input_obs.shape)
+        #     if input_type == 'rgb':
+        #         save_color(input_obs, filename='input_obs_rgb', directory=save_dir)
+        #     elif input_type == 'depth':
+        #         save_depth(input_obs, filename='input_obs_depth', directory=save_dir)
+        #         save_depth(input_obs, filename='input_obs_colour_depth', directory=save_dir, colour=True)
+        #     elif input_type == 'rgbd':
+        #         save_color(input_obs[:, :, :3], filename='input_obs_rgb', directory=save_dir)
+        #         save_depth(input_obs[:, :, 3], filename='input_obs_depth', directory=save_dir)
+        #         save_depth(input_obs[:, :, 3], filename='input_obs_colour_depth', directory=save_dir, colour=True)
 
         if 'action' in state:
             action = state['action']
             action_image = state['action_image']
             print('action image', action_image.shape)
             save_color(action_image, filename='action_image', directory=save_dir)
+            # cv2.imwrite(f'{save_dir}/action_image.png', action_image)
             with open(f'{save_dir}/action.json', "w") as json_file:
                 json.dump(action, json_file, indent=4)
-
+            #np.save(f'{save_dir}/action.npy', action)
+        
         if 'evaluation' in state:
             evaluation = state['evaluation']
             with open(f'{save_dir}/evaluation.json', "w") as json_file:
@@ -103,8 +139,9 @@ class ControlInterface:
                 'max_coverage': self.max_mask_pixels,
                 'init_coverage': self.init_mask_pixels,
                 'coverage': cur_mask_pixels,
-                'normalised_coverage': 1.0 * cur_mask_pixels/self.max_mask_pixels,
-                'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels) / (self.max_mask_pixels - self.init_mask_pixels), 1), 0),
+                'normalised_coverage': max(min(1.0, 1.0 * cur_mask_pixels/self.max_mask_pixels), 0),
+                'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
+                                                /(self.max_mask_pixels - self.init_mask_pixels), 1), 0),
                 'auto success': bool(1.0 * cur_mask_pixels/self.max_mask_pixels > 0.95),
                 'human success': False
             }
@@ -114,20 +151,20 @@ class ControlInterface:
             IoU, matched_mask = get_IoU(state['observation']['mask'], self.goal_mask)
             save_mask(matched_mask, filename='matched_mask', directory='tmp')
             return {
-                'human success': False,
+                'human success': False, 
                 'auto success': bool(IoU > 0.9),
                 'IoU': IoU}
 
     def setup_evaluation(self, state):
         if self.task == 'flattening':
-            current_mask = state['observation']['mask']
+            current_mask = state['observation']['full_mask']
             self.max_mask_pixels = int(np.sum(current_mask))
             save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_0')
             self._save_step(state, save_dir)
-
+            
         elif 'folding' in self.task:
             self.demo_states.append(state)
-
+        
             while True:
                 finish_demo = input('[User Attention!] Finish the demonstration? (y/n): ')
                 if finish_demo == 'n':
@@ -141,7 +178,7 @@ class ControlInterface:
                     continue
 
             if self.collect_demo:
-                demo_step = input('[User Attention!] Make a move manually, and enter any key to continue when finished!')
+                demo_step = input('[User Attention!] Make a move manually, and enter any key to continue when finshed!')
                 self.step = -1
                 self.publish_reset()
                 return
@@ -149,7 +186,7 @@ class ControlInterface:
                 for i, state in enumerate(self.demo_states):
                     save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_{i}')
                     self._save_step(state, save_dir)
-
+                
                 self.goal_mask = self.demo_states[-1]['observation']['mask']
 
         self.setup_init_state()

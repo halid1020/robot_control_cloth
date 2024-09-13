@@ -51,7 +51,7 @@ def get_IoU(mask1, mask2):
     best_mask = None
     
     # Define rotation angles to try
-    angles = range(0, 360, 10)  # Rotate from 0 to 350 degrees in 10-degree steps
+    angles = range(0, 360, 2)  # Rotate from 0 to 350 degrees in 10-degree steps
     
     for angle in angles:
         # Rotate mask1

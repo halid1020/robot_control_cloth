@@ -204,12 +204,13 @@ class HandEyeCalibrator:
         self.logger('Going Home')
         self.robot_arm.go(joint_states=self.home_joint_states)
         self.logger('Home position reached !!!')
+        self.robot_arm.go(MyPos(pose=self.ready_pos, orien=self.fix_orien),straight=True)
 
     def go_ready(self):
         self.logger('Going to ready position')
         self.robot_arm.go(joint_states=self.ready_joint_states)
         self.logger('Ready position reached')
-        self.robot_arm.go(MyPos(pose=self.ready_pos, orien=self.fix_orien),straight=True)
+        
 
     def go_pose(self, pose, straight=False):
         self.robot_arm.go(pose=pose,straight=straight)

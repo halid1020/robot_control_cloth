@@ -19,7 +19,8 @@ import torch
 import signal
 from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from segment_anything import sam_model_registry
-from agent_arena.utilities.visualisation_utils import draw_pick_and_place, filter_small_masks
+from agent_arena.utilities.visual_utils \
+    import draw_pick_and_place, filter_small_masks
 
 import subprocess
 import shlex
@@ -311,28 +312,87 @@ def get_mask_generator():
     return SamAutomaticMaskGenerator(sam)
 
 
-def get_orientation(point, mask):
+# def get_orientation(point, mask):
+#     mask = (mask > 0).astype(np.uint8)
+    
+#     # Compute gradients
+#     grad_y = sobel(mask, axis=0)
+#     grad_x = sobel(mask, axis=1)
+    
+#     x, y = point
+    
+#     # Calculate orientation
+#     gx = grad_x[y, x]
+#     gy = grad_y[y, x]
+#     orientation_rad = np.arctan2(gy, gx)
+    
+#     # Convert orientation to degrees
+#     orientation_deg = np.degrees(orientation_rad)
+    
+#     # Normalize to range [0, 360)
+#     orientation_deg = (orientation_deg - 90 + 360) % 360
+    
+#     return orientation_deg
+
+def get_orientation(point, mask, window_size=21):
+    # Ensure mask is binary
     mask = (mask > 0).astype(np.uint8)
     
-    # Compute gradients
-    grad_y = sobel(mask, axis=0)
-    grad_x = sobel(mask, axis=1)
-    
+    # Extract a window around the point
     x, y = point
+    half_window = window_size // 2
+    window = mask[max(0, y-half_window):min(mask.shape[0], y+half_window+1),
+                  max(0, x-half_window):min(mask.shape[1], x+half_window+1)]
+    
+    # Compute gradients
+    grad_y = sobel(window, axis=0)
+    grad_x = sobel(window, axis=1)
+    
+    # Compute orientation using Principal Component Analysis (PCA)
+    cov = np.cov(np.array([grad_x.ravel(), grad_y.ravel()]))
+    eigenvalues, eigenvectors = np.linalg.eig(cov)
+    
+    # The eigenvector corresponding to the smaller eigenvalue 
+    # gives the direction perpendicular to the dominant edge
+    idx = eigenvalues.argsort()[::-1]
+    eigenvectors = eigenvectors[:, idx]
     
     # Calculate orientation
-    gx = grad_x[y, x]
-    gy = grad_y[y, x]
-    orientation_rad = np.arctan2(gy, gx)
+    orientation_rad = np.arctan2(eigenvectors[1, 1], eigenvectors[0, 1])
     
     # Convert orientation to degrees
     orientation_deg = np.degrees(orientation_rad)
     
     # Normalize to range [0, 360)
-    orientation_deg = (orientation_deg - 90 + 360) % 360
+    orientation_deg = (orientation_deg + 360) % 360 - 180
     
     return orientation_deg
 
+def refine_orientation(point, mask, initial_orientation, refinement_angle=10, num_steps=21):
+    x, y = point
+    best_orientation = initial_orientation
+    max_sum = 0
+    
+    for angle in np.linspace(initial_orientation - refinement_angle, 
+                             initial_orientation + refinement_angle, num_steps):
+        line_points = get_line_points(point, angle, length=20)
+        line_sum = sum(mask[py, px] for px, py in line_points if 0 <= py < mask.shape[0] and 0 <= px < mask.shape[1])
+        
+        if line_sum > max_sum:
+            max_sum = line_sum
+            best_orientation = angle
+    
+    return best_orientation
+
+def get_line_points(start, angle, length):
+    x, y = start
+    rad = np.radians(angle)
+    return [(int(x + i * np.cos(rad)), int(y + i * np.sin(rad))) for i in range(length)]
+
+def improved_get_orientation(point, mask):
+    initial_orientation = get_orientation(point, mask)
+    refined_orientation = refine_orientation(point, mask, initial_orientation)
+    return refined_orientation
 
 def stop_ffmpeg_recording(process):
     """
@@ -442,6 +502,7 @@ def imgmsg_to_cv2_custom(img_msg, encoding="bgr8"):
     return image
 
 def save_color(img, filename='color', directory="."):
+    print('save color img' , img.shape)
     img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     cv2.imwrite('{}/{}.png'.format(directory, filename), img_bgr)
 

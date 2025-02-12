@@ -71,27 +71,15 @@ ros2 launch rcc_qs_pnp \
     planner:=ompl
 ```
 
-4. Run either of the following option to generate pick-and-place policy
-    
-    a. Human interace
-    ```
-    source /opt/ros/humble/setup.bash
-    source <path-to-workspace>rcc_build/install/setup.sh
-    
-    ros2 run rcc_qs_pnp human_interface.py
-    ```
-
-    b. Following the [`agent-arena`'s ROS2 `Humble` setup]() for autimatically generate pick-and-place policy.
-
-
 ## IV. Test Individual Components
 
 1. Test ur3e robot with moveit
+Right under `<ws_name>`
 ```
 source /opt/ros/humble/setup.bash
-source <path-to-workspace>/rcc_build/install/setup.sh
+source ./rcc_build/install/setup.sh
 
-ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:ur3e_robot_moveit.py
+ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:=ur3e_robot_moveit.py
 ```
 
 2. Test active gripper
@@ -161,7 +149,7 @@ pkill -SIGINT ffmpeg
 python agent_arena_interface.py --agent foldsformer --domain ffmr-square-fabric --adjust_pick --adjust_orien --depth_sim2real v0 --mask_sim2real v2 --task all-corner-inward-folding --config default
 ```
 
-## VI. Run MJ-TN
+## VI. Run JA-TN
 ```
 python agent_arena_interface.py --agent transporter --domain sim2real-square-fabric --adjust_pick --adjust_orien --depth_sim2real v2 --mask_sim2real v2 --task all-corner-inward-folding --config MJ-TN-1000-rgb-maskout-rotation-90
 
@@ -169,6 +157,6 @@ python agent_arena_interface.py --agent transporter --domain sim2real-square-fab
 
 ## VI. Run Diffusion
 ```
-python agent_arena_interface.py --agent diffusion_policy --domain sim2real-rect-fabric --adjust_pick --adjust_orien --depth_sim2real v2 --mask_sim2real v2 --task flattening --config masked-rgb
+python agent_arena_interface.py --agent diffusion_policy --domain real2sim-towels --adjust_pick --adjust_orien --depth_sim2real v2 --mask_sim2real v2 --task flattening --config masked-rgb
 
 ```

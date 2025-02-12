@@ -107,9 +107,37 @@ class ControlInterface(Node):
                 save_depth(input_obs, filename='input_obs_depth', directory=save_dir)
                 save_depth(input_obs, filename='input_obs_colour_depth', directory=save_dir, colour=True)
             elif input_type == 'rgbd':
-                save_color(input_obs[:, :, :3], filename='input_obs_rgb', directory=save_dir)
+                print('input_obs', input_obs.shape)
+                rgb = input_obs[:, :, :3].copy().clip(0, 255).astype(np.uint8)
+                save_color(rgb, filename='input_obs_rgb', directory=save_dir)
                 save_depth(input_obs[:, :, 3], filename='input_obs_depth', directory=save_dir)
                 save_depth(input_obs[:, :, 3], filename='input_obs_colour_depth', directory=save_dir, colour=True)
+        
+        if 'denoise_action_input_obs_rgb' in state:
+            denoise_action_input_obs_rgb = state['denoise_action_input_obs_rgb']
+            save_color(denoise_action_input_obs_rgb, filename='denoise_action_input_obs_rgb', directory=save_dir)
+        
+        if 'denoise_action_rgb' in state:
+            denoise_action_rgb = state['denoise_action_rgb']
+            save_color(denoise_action_rgb, filename='denoise_action_rgb', directory=save_dir)
+
+        if 'grasp_image' in state:
+            grasp_image = state['grasp_image']
+            save_color(grasp_image, filename='grasp_image', directory=save_dir)
+
+        if 'action_obs_rgb' in state:
+            action_obs_rgb = state['action_obs_rgb']
+            save_color(action_obs_rgb, filename='action_obs_rgb', directory=save_dir)
+        
+        if 'noise_actions_obs_depth' in state:
+            noise_actions_obs_depth = state['noise_actions_obs_depth']
+            save_color(noise_actions_obs_depth, filename='noise_actions_obs_depth', directory=save_dir)
+
+        if 'denoise_depth_frames' in state:
+            from agent_arena.utilities.visual_utils import save_numpy_as_gif
+            file_dir = os.path.join(save_dir, 'denoise_depth_frames')
+            save_numpy_as_gif(state['denoise_depth_frames'], file_dir)
+            #save_frames(, directory=save_dir, filename='denoise_depth_frames')
 
         if 'action' in state:
             action = state['action']
@@ -264,13 +292,15 @@ class ControlInterface(Node):
 
         self.last_action = action
         pick_and_place = action['pick-and-place']
-        pixel_actions = ((pick_and_place + 1) / 2 * self.resolution[0]).astype(int).reshape(4)
+        H, W, _ = save_state['observation']['rgb'].shape
+        pixel_actions = ((pick_and_place.reshape(-1, 2) + 1) / 2 * np.asarray([H, W])).astype(int).reshape(4)
         action_image = draw_pick_and_place(
             save_state['observation']['rgb'],
             tuple(pixel_actions[:2]),
             tuple(pixel_actions[2:]),
-            color=(0, 255, 0)
-        ).astype(np.uint8)
+            color=(0, 0, 255),
+            swap=True,
+        ).get().astype(np.uint8)
         action['pick-and-place'] = action['pick-and-place'].reshape(4).tolist()
         #print('save actio', action)
         save_state['action'] = action

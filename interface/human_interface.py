@@ -27,7 +27,7 @@ class HumanPickAndPlace(ControlInterface):
         
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
                          name='human', adjust_orien=adjust_orien)
-        self.save_dir = f'./human_data/{task}'
+        self.save_dir = f'/data/human_data/{task}'
         #self.mask_sim2real = mask_sim2real
         os.makedirs(self.save_dir, exist_ok=True)
         # self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)

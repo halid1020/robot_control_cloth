@@ -18,7 +18,7 @@ import agent_arena as agar
 
 from rcc_msgs.msg import NormPixelPnP, Observation
 from std_msgs.msg import Header
-from agent_arena.utilities.visualisation_utils import *
+from agent_arena.utilities.visual_utils import *
 
 import argparse
 from cv_bridge import CvBridge, CvBridgeError
@@ -95,23 +95,91 @@ class AgentArenaInterface(ControlInterface):
     
     def act(self, state):
         mask = state['observation']['mask']
+        state['arena_id'] = 0
         height, width = mask.shape[:2]
-        pnp = self.agent.act(state).reshape(4)
+        action = self.agent.act([state])[0]
+        pnp = np.concatenate([action['pick_0'][::-1], action['place_0'][::-1]]).reshape(4)
         orientation = 0.0
         pick_pixel = ((pnp[:2] + 1)/2*height).clip(0, height-1).astype(np.int32)
         
         if self.adjust_pick:
-           
-            adjust_pick, errod_mask = adjust_points([pick_pixel], mask.copy())
+            org_pick = pick_pixel.copy()
+            adjust_pick, errod_mask = adjust_points([pick_pixel], mask.copy(), 5)
             pick_pixel = adjust_pick[0]
 
+        # if self.adjust_orient:
+        #     if self.adjust_pick:
+        #         feed_mask = errod_mask
+        #     else:
+        #         feed_mask = mask
+
+            
+        
+        
+        #     orientation = get_orientation(pick_pixel, feed_mask.copy())
+        #     ## combine mask and feed_mask, make mask gray and feed_mask as white
+        #     ## draw the org_pick and pick_pixel on the image, org_pick in light_green and pick_pixel in green
+        #     # draw the orientation line on the image with red
+        #     ## save the image in the self.agent.state
+
+        #     mask = mask * 0.5
+        #     feed_mask = feed_mask * 0.5 + 0.5
+        #     grasp_image = mask + feed_mask
+        #     grasp_image = (mask * 255).astype(np.uint8)
+        #     grasp_image = cv2.cvtColor(grasp_image, cv2.COLOR_GRAY2RGB)
+            
+        #     grasp_image = cv2.circle(grasp_image, tuple(org_pick[::-1]), 5, [144, 238, 144], -1)
+        #     grasp_image = cv2.circle(grasp_image, tuple(pick_pixel[::-1]), 5, [0, 128, 0], -1)
+
+        #     orientation = orientation * np.pi/180
+        #     end_point = (int(pick_pixel[0] + 20*np.cos(orientation)), int(pick_pixel[1] + 20*np.sin(orientation)))
+        #     grasp_image = cv2.line(grasp_image, tuple(pick_pixel[::-1]), end_point[::-1], [0, 0, 255], 2)
+
+        #     self.agent.state['grasp_image'] = grasp_image
+
         if self.adjust_orient:
-            if self.adjust_pick:
-                feed_mask = errod_mask
-            else:
-                feed_mask = mask
+            # Determine which mask to use based on adjust_pick
+            feed_mask = errod_mask if self.adjust_pick else mask
+
+            # Get orientation of the pick point
             orientation = get_orientation(pick_pixel, feed_mask.copy())
-            print('orient', orientation)
+
+            # Combine mask and feed_mask
+            mask_gray = mask.astype(np.float32) * 0.5
+            feed_mask_white = feed_mask.astype(np.float32) * 0.5
+            grasp_image = mask_gray + feed_mask_white
+
+            # Convert to 8-bit RGB image
+            grasp_image = (grasp_image * 255).clip(0, 255).astype(np.uint8)
+            grasp_image = cv2.cvtColor(grasp_image, cv2.COLOR_GRAY2RGB)
+            ## resize grasp image to make it bigger
+            grasp_image = cv2.resize(grasp_image, (width*2, height*2))
+            draw_pick_pixel = (np.asarray(pick_pixel) * 2).astype(np.int32)
+            org_pick = (org_pick * 2).astype(np.int32)
+
+            # Draw original pick point (light green) and adjusted pick point (dark green)
+            # swap x and y coordinates for cv2.circle
+            #pick_pixel = (pick_pixel + 1) / 2 * H
+           
+
+            # Draw orientation line (red)
+            orientation_rad = orientation * np.pi / 180
+            end_point = (
+                int(draw_pick_pixel[0] + 30 * np.cos(orientation_rad)),
+                int(draw_pick_pixel[1] + 30 * np.sin(orientation_rad))
+            )
+            start_point = (
+                int(draw_pick_pixel[0] - 30 * np.cos(orientation_rad)),
+                int(draw_pick_pixel[1] - 30 * np.sin(orientation_rad))
+            )
+            cv2.line(grasp_image, start_point, end_point, (255, 0, 0), 4)
+
+            cv2.circle(grasp_image, tuple(org_pick), 7, (144, 238, 144), -1)
+            cv2.circle(grasp_image, tuple(draw_pick_pixel), 7, (170, 51, 106), -1)
+
+            # Save the image in the agent's state
+            agent_state = self.agent.get_state()[0]
+            agent_state['grasp_image'] = grasp_image
 
         pnp[:2] = np.asarray(pick_pixel, dtype=np.float32)/height * 2 - 1
 
@@ -126,13 +194,15 @@ class AgentArenaInterface(ControlInterface):
     
     def reset(self):
         super().reset()
-        self.agent.reset()
+        self.agent.reset([0]) # arena id 0.
     
     def init(self, state):
-        self.agent.init(state)
+        state['arena_id'] = 0
+        self.agent.init([state])
     
     def update(self, state, action):
-        self.agent.update(state, np.asarray(action['pick-and-place']))
+        state['arena_id'] = 0
+        self.agent.update([state], [np.asarray(action['pick-and-place'])])
 
     def get_state(self):
         return self.agent.get_state()
@@ -225,7 +295,7 @@ if __name__ == "__main__":
     print('Initialise Agent ...')
     if args.task == 'flattening':
         #domain = 'sim2real-rect-fabric'
-        initial = 'crumple'
+        initial = 'crumpled'
     elif args.task in ['double-side-folding', 'rectangular-folding']:
         #domain = 'sim2real-rect-fabric'
         initial = 'flatten'
@@ -250,12 +320,13 @@ if __name__ == "__main__":
     agent_config = agar.retrieve_config(
         args.agent, 
         arena, 
-        args.config,
-        args.log_dir)
+        args.config)
     
     agent = agar.build_agent(
         args.agent,
         config=agent_config)
+    log_dir = os.path.join(args.log_dir, arena, args.agent, args.config)
+    agent.set_log_dir(log_dir)
 
     if args.eval_checkpoint == -1:
         checkpoint = agent.load()

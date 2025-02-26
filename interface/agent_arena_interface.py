@@ -101,9 +101,8 @@ class AgentArenaInterface(ControlInterface):
         pnp = np.concatenate([action['pick_0'][::-1], action['place_0'][::-1]]).reshape(4)
         orientation = 0.0
         pick_pixel = ((pnp[:2] + 1)/2*height).clip(0, height-1).astype(np.int32)
-        
+        org_pick = pick_pixel.copy()
         if self.adjust_pick:
-            org_pick = pick_pixel.copy()
             adjust_pick, errod_mask = adjust_points([pick_pixel], mask.copy(), 5)
             pick_pixel = adjust_pick[0]
 

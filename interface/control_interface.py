@@ -255,8 +255,9 @@ class ControlInterface(Node):
         crop_rgb = imgmsg_to_cv2_custom(data.crop_rgb, "bgr8")
         crop_depth = imgmsg_to_cv2_custom(data.crop_depth, "64FC1")
         raw_rgb = imgmsg_to_cv2_custom(data.raw_rgb, "bgr8")
+        workspace = imgmsg_to_cv2_custom(data.workspace_mask, "mono8")
         self.real_camera_height = data.camera_height
-        input_state = self.post_process(crop_rgb, crop_depth, raw_rgb)
+        input_state = self.post_process(crop_rgb, crop_depth, workspace, raw_rgb)
 
         if self.step == -1:
             self.step += 1
@@ -293,7 +294,7 @@ class ControlInterface(Node):
         self.last_action = action
         pick_and_place = action['pick-and-place']
         H, W, _ = save_state['observation']['rgb'].shape
-        pixel_actions = ((pick_and_place.reshape(-1, 2) + 1) / 2 * np.asarray([H, W])).astype(int).reshape(4)
+        pixel_actions = ((pick_and_place.reshape(-1, 2) + 1) / 2 * np.asarray([W, H])).astype(int).reshape(4)
         action_image = draw_pick_and_place(
             save_state['observation']['rgb'],
             tuple(pixel_actions[:2]),
@@ -389,5 +390,5 @@ class ControlInterface(Node):
         self.reset()
         rclpy.spin(self)
 
-    def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
+    def post_process(self, rgb, depth, workspace, raw_rgb=None, pointcloud=None):
         pass

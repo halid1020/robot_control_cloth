@@ -498,6 +498,8 @@ def imgmsg_to_cv2_custom(img_msg, encoding="bgr8"):
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     elif encoding == "mono8":
         image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    elif encoding == "8UC1":
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
     return image
 

@@ -108,7 +108,7 @@ def get_mask_v2(mask_generator, rgb):
             mask_shape = rgb.shape[:2]
 
             ## count no mask corner of the mask
-            margin = 5
+            margin = 5 #5
             mask_corner_value = 1.0*segmentation_mask[margin, margin] + 1.0*segmentation_mask[margin, -margin] + \
                                 1.0*segmentation_mask[-margin, margin] + 1.0*segmentation_mask[-margin, -margin]
             
@@ -158,9 +158,17 @@ def get_mask_v2(mask_generator, rgb):
                 'mask_region_size': mask_region_size,
             })
         
-        top_5_masks = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[:3]
+        top_num = 3
+        top_5_masks = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[:top_num]
         final_mask_data = sorted(top_5_masks, key=lambda x: x['mask_region_size'], reverse=True)[0]
         final_mask = final_mask_data['mask']
+
+        ## make the margine of the final mask to be 0
+        margin = 5
+        final_mask[:margin, :] = 0
+        final_mask[-margin:, :] = 0
+        final_mask[:, :margin] = 0
+        final_mask[:, -margin:] = 0
 
         ## print the average color of the mask background
         masked_region = np.expand_dims(final_mask, -1) * rgb
@@ -347,6 +355,9 @@ def get_orientation(point, mask, window_size=21):
     # Compute gradients
     grad_y = sobel(window, axis=0)
     grad_x = sobel(window, axis=1)
+
+    if np.all(grad_x == 0) and np.all(grad_y == 0):
+        return 0.0  # Return 0 degrees if no gradient
     
     # Compute orientation using Principal Component Analysis (PCA)
     cov = np.cov(np.array([grad_x.ravel(), grad_y.ravel()]))

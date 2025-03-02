@@ -96,6 +96,16 @@ class ControlInterface(Node):
         if 'raw_rgb' in state['observation']:
             raw_rgb = state['observation']['raw_rgb']
             save_color(raw_rgb, filename='raw_rgb', directory=save_dir)
+        
+        if 'workspace_mask' in state['observation']:
+            workspace_mask = state['observation']['workspace_mask'][:, :, None]
+            rgb = state['observation']['rgb']
+
+            alpha = 0.3
+            rgb = rgb.astype(np.float32)/255
+            rgb = rgb*workspace_mask + alpha*rgb*(1-workspace_mask)
+            rgb = (rgb * 255).astype(np.uint8)
+            save_color(rgb, filename='workspace_rgb', directory=save_dir)
 
         if 'input_obs' in state:
             input_obs = state['input_obs']

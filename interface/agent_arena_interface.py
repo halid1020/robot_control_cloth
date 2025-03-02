@@ -98,9 +98,11 @@ class AgentArenaInterface(ControlInterface):
         state['arena_id'] = 0
         height, width = mask.shape[:2]
         action = self.agent.act([state])[0]
+        if 'norm-pixel-pick-and-place' in action:
+            action = action['norm-pixel-pick-and-place']
         pnp = np.concatenate([action['pick_0'][::-1], action['place_0'][::-1]]).reshape(4)
         orientation = 0.0
-        pick_pixel = ((pnp[:2] + 1)/2*height).clip(0, height-1).astype(np.int32)
+        pick_pixel = ((pnp[:2]-0.0001 + 1)/2*np.asarray([width, height])).astype(np.int32)
         org_pick = pick_pixel.copy()
         if self.adjust_pick:
             adjust_pick, errod_mask = adjust_points([pick_pixel], mask.copy(), 5)
@@ -135,7 +137,7 @@ class AgentArenaInterface(ControlInterface):
         #     grasp_image = cv2.line(grasp_image, tuple(pick_pixel[::-1]), end_point[::-1], [0, 0, 255], 2)
 
         #     self.agent.state['grasp_image'] = grasp_image
-
+        print('adjust orient', self.adjust_orient)
         if self.adjust_orient:
             # Determine which mask to use based on adjust_pick
             feed_mask = errod_mask if self.adjust_pick else mask
@@ -180,7 +182,7 @@ class AgentArenaInterface(ControlInterface):
             agent_state = self.agent.get_state()[0]
             agent_state['grasp_image'] = grasp_image
 
-        pnp[:2] = np.asarray(pick_pixel, dtype=np.float32)/height * 2 - 1
+        pnp[:2] = np.asarray(pick_pixel, dtype=np.float32)/np.asarray([width, height]) * 2 - 1
 
         action = {
             'pick-and-place': pnp,
@@ -206,9 +208,9 @@ class AgentArenaInterface(ControlInterface):
     def get_state(self):
         return self.agent.get_state()
 
-    def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
-        rgb = cv2.resize(rgb, self.resolution)
-        depth = cv2.resize(depth, self.resolution)
+    def post_process(self, rgb, depth, workspace, raw_rgb=None, pointcloud=None):
+        # rgb = cv2.resize(rgb, self.resolution)
+        # depth = cv2.resize(depth, self.resolution)
         if self.mask_sim2real == 'v2':
             mask = get_mask_v2(self.mask_generator, rgb)
 
@@ -219,10 +221,12 @@ class AgentArenaInterface(ControlInterface):
         ### the agent needs to do the adjustment according! 
         
         if self.depth_sim2real in ['v1', 'v2']:
-            norm_depth = (depth - np.min(depth))/((np.max(depth)) - np.min(depth))
-            masked_depth = norm_depth * mask
+            norm_depth = (depth - np.min(depth))/((np.max(depth)+0.005) - np.min(depth))
+            if len(mask.shape) == 2:
+                mask_ = np.expand_dims(mask, -1)
+            masked_depth = norm_depth * mask_
             new_depth = np.ones_like(masked_depth)
-            depth = new_depth * (1 - mask) + masked_depth
+            depth = new_depth * (1 - mask_) + masked_depth
         
         elif self.depth_sim2real == 'v0':
             depth += (self.sim_camera_height - self.real_camera_height)
@@ -239,14 +243,15 @@ class AgentArenaInterface(ControlInterface):
             'observation': {
                 'rgb': rgb.copy(),
                 'depth': depth.copy(),
-                'mask': mask.copy()
+                'mask': mask.copy(),
+                'workspace_mask': workspace.copy()[:, :, 0]
             },
             'action_space': Box(
                 -np.ones((1, 4)).astype(np.float32),
                 np.ones((1, 4)).astype(np.float32),
                 dtype=np.float32),
             'sim2real': True,
-            'task': self.task
+            'task': self.task,
         }
 
         if raw_rgb is not None:

@@ -206,7 +206,7 @@ class AgentArenaInterface(ControlInterface):
         self.agent.update([state], [np.asarray(action['pick-and-place'])])
 
     def get_state(self):
-        return self.agent.get_state()
+        return self.agent.get_state()[0]
 
     def post_process(self, rgb, depth, workspace, raw_rgb=None, pointcloud=None):
         # rgb = cv2.resize(rgb, self.resolution)
@@ -221,7 +221,7 @@ class AgentArenaInterface(ControlInterface):
         ### the agent needs to do the adjustment according! 
         
         if self.depth_sim2real in ['v1', 'v2']:
-            norm_depth = (depth - np.min(depth))/((np.max(depth)+0.005) - np.min(depth))
+            norm_depth = (depth - np.min(depth))/((np.max(depth)+1e-6) - np.min(depth))
             if len(mask.shape) == 2:
                 mask_ = np.expand_dims(mask, -1)
             masked_depth = norm_depth * mask_

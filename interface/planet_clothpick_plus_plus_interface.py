@@ -23,7 +23,7 @@ def parse_arguments():
     #parser.add_argument('--store_interm', action='store_true', help='store intermediate results')
     parser.add_argument('--eval_checkpoint', default=-1, type=int)
 
-    parser.add_argument('--agent_config',  default='MD2M-on-mix-200k-sf')
+    parser.add_argument('--agent_config',  default='D2M-on-mix-200k-sf')
     parser.add_argument('--object', default='longsleeve', type=str)
     parser.add_argument('--sampler_config', default='cloth-mask-centre-multiple', type=str)
 
@@ -64,6 +64,7 @@ if __name__ == "__main__":
     config.transform.params.depth_clip_max = 1.0 #0.76
     config.transform.params.depth_min = 0 # 0.72
     config.transform.params.depth_max = 1.0 # 0.76
+    config.transform.params.depth_eval_process = False
     
 
     agent = agar.build_agent(agent_name, config)

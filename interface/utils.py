@@ -2,6 +2,7 @@ import time
 import select
 import sys
 
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import pyrealsense2 as rs
@@ -519,13 +520,49 @@ def save_color(img, filename='color', directory="."):
     img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     cv2.imwrite('{}/{}.png'.format(directory, filename), img_bgr)
 
-def save_depth(depth, filename='depth', directory=".", colour=False):
-    depth = (depth - np.min(depth))/(np.max(depth) - np.min(depth))
+def save_depth(depth, filename='depth', directory=".", colour=False, remap=True):
+    if remap:
+        depth = (depth - np.min(depth))/(np.max(depth) - np.min(depth))
+    
     if colour:
         depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_JET)
     else:
         depth = np.uint8(255 * depth)
+    
     cv2.imwrite('{}/{}.png'.format(directory, filename), depth)
+
+def save_depth_distribution(depth_image, filename='depth_distribution', directory="."):
+    """
+    Saves a histogram of depth values from a depth image to a PNG file.
+
+    Parameters:
+        depth_image (numpy.ndarray): A 2D array representing the depth image.
+        filename (str): The name of the output file (without extension). Default is 'depth_distribution'.
+        directory (str): The directory where the file will be saved. Default is the current directory (".").
+    """
+    # Ensure the directory exists
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Compute histogram with 100 bins
+    depth_image = depth_image.flatten()
+    hist, bins = np.histogram(depth_image, bins=100)
+    print('hist', hist)
+    print('bins', bins)
+    
+    # Compute bin centers for better alignment in the bar plot
+    bin_centers = (bins[:-1] + bins[1:]) / 2
+    
+    # Plot and save histogram
+    plt.figure()
+    plt.bar(bin_centers, hist, width=np.diff(bins), align='center')
+    plt.xlabel('Depth Value')
+    plt.ylabel('Frequency')
+    plt.yscale('log')
+    plt.title('Depth Distribution')
+    plt.savefig(f'{directory}/{filename}.png')
+    plt.close()
+
 
 def save_mask(mask, filename='mask', directory="."):
     mask = mask.astype(np.int8)*255

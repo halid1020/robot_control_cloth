@@ -70,7 +70,7 @@ class ControlInterface(Node):
         
 
         os.makedirs(save_dir, exist_ok=True)
-        print('rgb shape', rgb.shape)
+        # print('rgb shape', rgb.shape)
         save_color(rgb, filename='rgb', directory=save_dir)
         
         save_depth(depth, filename='depth', directory=save_dir)
@@ -107,6 +107,8 @@ class ControlInterface(Node):
             rgb = (rgb * 255).astype(np.uint8)
             save_color(rgb, filename='workspace_rgb', directory=save_dir)
 
+        print('state', state.keys())
+
         if 'input_obs' in state:
             input_obs = state['input_obs']
             input_type = state['input_type']
@@ -114,8 +116,13 @@ class ControlInterface(Node):
             if input_type == 'rgb':
                 save_color(input_obs, filename='input_obs_rgb', directory=save_dir)
             elif input_type == 'depth':
-                save_depth(input_obs, filename='input_obs_depth', directory=save_dir)
-                save_depth(input_obs, filename='input_obs_colour_depth', directory=save_dir, colour=True)
+                print('max depth', np.max(input_obs))
+                print('min depth', np.min(input_obs))
+                ## save a plot for the distribution of the depth
+                save_depth_distribution(input_obs, filename='input_obs_depth_distribution', directory=save_dir)
+
+                save_depth(input_obs, filename='input_obs_depth', directory=save_dir, remap=False)
+                save_depth(input_obs, filename='input_obs_colour_depth', directory=save_dir, colour=True, remap=False)
             elif input_type == 'rgbd':
                 print('input_obs', input_obs.shape)
                 rgb = input_obs[:, :, :3].copy().clip(0, 255).astype(np.uint8)

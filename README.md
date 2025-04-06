@@ -1,6 +1,9 @@
 
 # Robot Control Cloth
-Halid Abdulrahim Kadi and Kasim Terzic.
+Authored by Halid Abdulrahim Kadi and Jose Alex Chandy.
+Supervised by Luis Figueredo, Kasim Terzić, and Praminda Caleb-Solly.
+
+This repository is for setting up the real-robot control part of the DRAPER project. It supports the operations of ROS1 Noetic for Franka Emika Panda and ROS2 Humble for UR3e robot arms.
 
 ## I. Installation
 
@@ -48,7 +51,7 @@ cd rcc_build
 colcon build --base-paths ../
 ```
 
-## III. Run Quasi-Static Pick-and-Place Robot Control Program
+## III. Run the Quasi-Static Pick-and-Place Robot Control Program
 
 1. Lauch UR driver
 ```
@@ -149,7 +152,7 @@ Video Recording Start
 ffmpeg -f v4l2 -video_size 1920x1080 -framerate 30 -i /dev/video6 -c:v libx264 -crf 23 -preset medium -bufsize 5M output.mp4
 ```
 
-Video Recoding Stop
+Video Recording Stop
 ```
 pkill -SIGINT ffmpeg
 ```

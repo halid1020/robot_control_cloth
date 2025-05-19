@@ -100,7 +100,7 @@ def get_mask_v2(mask_generator, rgb):
         final_mask = None
         max_color_difference = 0
         print('Processing mask results...')
-        save_color(rgb, 'rgb')
+        save_color(rgb, 'rgb', './tmp')
         mask_data = []
 
         # Iterate over each generated mask result
@@ -192,7 +192,7 @@ def get_mask_v1(mask_generator, rgb):
     final_mask = None
     max_color_difference = 0
     print('Processing mask results...')
-    save_color(rgb, 'rgb')
+    save_color(rgb, 'rgb', './tmp')
     mask_data = []
 
     # Iterate over each generated mask result
@@ -316,7 +316,10 @@ def get_mask_generator():
 
     ### Masking Model Macros ###
     MODEL_TYPE = "vit_h"
-    sam = sam_model_registry[MODEL_TYPE](checkpoint='sam_vit_h_4b8939.pth')
+    sam = sam_model_registry[MODEL_TYPE](
+        checkpoint=os.path.join(
+            os.environ['ROBOT_CONTROL_CLOTH_DIR'], 'interface', 'sam_vit_h_4b8939.pth'))
+
     sam.to(device=DEVICE)
     return SamAutomaticMaskGenerator(sam)
 

@@ -11,7 +11,7 @@ from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
 
-from utils import *
+from .utils import *
 
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',

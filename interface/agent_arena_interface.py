@@ -22,8 +22,8 @@ from agent_arena.utilities.visual_utils import *
 
 import argparse
 from cv_bridge import CvBridge, CvBridgeError
-from utils import *
-from control_interface import ControlInterface
+from .utils import *
+from .control_interface import ControlInterface
 
 
 class AgentArenaInterface(ControlInterface):

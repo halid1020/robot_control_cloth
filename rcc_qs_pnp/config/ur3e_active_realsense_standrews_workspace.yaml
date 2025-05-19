@@ -60,9 +60,9 @@ camera_orien: [180.0, 0.000000, 89.500000] # Euler system in degree.
 
 load_intrinsic: "from_camera"
 
-crop_resol: [1050, 600]
-crop_start_x: 100
-crop_start_y: 100
+crop_resol: [1280, 700] # [1200, 700]
+crop_start_x: 0 #50
+crop_start_y: 20 #50
 
 # ####################
 # ## MoveIt Setting ##

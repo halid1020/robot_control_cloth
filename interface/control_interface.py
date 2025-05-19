@@ -15,7 +15,9 @@ from utils import *
 
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',
-                 adjust_pick=False, adjust_orien=False, video_device='/dev/video6', save_dir='.'):
+                 adjust_pick=False, adjust_orien=False, 
+                 video_device='/dev/video6', 
+                 save_dir='.'):
         super().__init__(f"{name}_interface")
         self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
         self.pnp_pub = self.create_publisher(NormPixelPnP, '/norm_pixel_pnp', 10)
@@ -33,7 +35,6 @@ class ControlInterface(Node):
         self.adjust_orient = adjust_orien
         self.video_device = video_device
         self.video_process = None
-
         if 'folding' in task:
             self.collect_demo = False
             self.demo_states = []
@@ -114,6 +115,7 @@ class ControlInterface(Node):
             input_type = state['input_type']
             print('input_obs', input_obs.shape)
             if input_type == 'rgb':
+                input_obs = (input_obs * 255).clip(0, 255).astype(np.uint8)
                 save_color(input_obs, filename='input_obs_rgb', directory=save_dir)
             elif input_type == 'depth':
                 print('max depth', np.max(input_obs))
@@ -250,7 +252,7 @@ class ControlInterface(Node):
         is_continue = input('[User Attention!] Please set a random initial state, and enter any keys after setup to continue!')
         
 
-    def clean_up(self, state):
+    def end_trial(self, state):
         self.stop_video()
 
         while True:
@@ -294,7 +296,7 @@ class ControlInterface(Node):
             done = True
 
         if done:
-            self.clean_up(input_state)
+            self.end_trial(input_state)
             return
         elif self.step == 0:
             self.init(input_state)

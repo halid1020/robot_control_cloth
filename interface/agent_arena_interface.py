@@ -35,11 +35,14 @@ class AgentArenaInterface(ControlInterface):
                  depth_sim2real='v2',
                  mask_sim2real='v2',
                  sim_camera_height=0.65,
+                 callback_on_internal_states=None,
                  save_dir='.'):
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
                          name='agent', adjust_orien=adjust_orien, save_dir=save_dir)
 
         self.agent = agent
+        self.internal_states = []
+        self.callback_on_internal_states = callback_on_internal_states
         # print('Max steps {}'.format(steps))
         #  ### Initialise Ros
         # self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
@@ -93,11 +96,18 @@ class AgentArenaInterface(ControlInterface):
             cv2.imwrite('{}/place-heat.png'.format(save_dir,self.step), pick_heat)
             cv2.imwrite('tmp/place-heat.png', pick_heat)
     
+    def end_trial(self, state):
+        if self.callback_on_internal_states is not None:
+            self.callback_on_internal_states(self.internal_states)
+        return super().end_trial(state)
+    
     def act(self, state):
         mask = state['observation']['mask']
         state['arena_id'] = 0
         height, width = mask.shape[:2]
         action = self.agent.act([state])[0]
+        self.internal_states.append(self.agent.get_state()[0])
+        print('inter states keys', self.agent.get_state()[0].keys())
         if 'norm-pixel-pick-and-place' in action:
             action = action['norm-pixel-pick-and-place']
         pnp = np.concatenate([action['pick_0'][::-1], action['place_0'][::-1]]).reshape(4)
@@ -195,15 +205,19 @@ class AgentArenaInterface(ControlInterface):
     
     def reset(self):
         super().reset()
+        self.internal_states = []
         self.agent.reset([0]) # arena id 0.
     
     def init(self, state):
         state['arena_id'] = 0
         self.agent.init([state])
+       
     
     def update(self, state, action):
         state['arena_id'] = 0
         self.agent.update([state], [np.asarray(action['pick-and-place'])])
+        print('update states', self.agent.get_state()[0].keys())
+      
 
     def get_state(self):
         return self.agent.get_state()[0]
@@ -220,14 +234,49 @@ class AgentArenaInterface(ControlInterface):
         ### background are 1s.
         ### the agent needs to do the adjustment according! 
         
+        # if self.depth_sim2real in ['v1', 'v2']:
+        #     if len(mask.shape) == 2:
+        #         mask_ = np.expand_dims(mask, -1)
+
+        #     if np.max(depth) == np.min(depth):
+        #         depth = np.zeros_like(depth)
+        #     else:
+        #         depth = (depth - np.min(depth))/(np.max(depth) - np.min(depth))
+            
+        #     masked_depth = depth * mask_
+        #     new_depth = np.ones_like(masked_depth)
+        #     depth = new_depth * (1 - mask_) + masked_depth
+
         if self.depth_sim2real in ['v1', 'v2']:
-            norm_depth = (depth - np.min(depth))/((np.max(depth)+1e-6) - np.min(depth))
             if len(mask.shape) == 2:
                 mask_ = np.expand_dims(mask, -1)
-            masked_depth = norm_depth * mask_
-            new_depth = np.ones_like(masked_depth)
-            depth = new_depth * (1 - mask_) + masked_depth
-        
+            else:
+                mask_ = mask
+            
+            # Create boolean mask for indexing
+            bool_mask = mask_.astype(bool)
+            
+            # Extract only the masked region
+            masked_region = depth[bool_mask]
+            
+            if masked_region.size > 0:  # Check if mask is not empty
+                sort_masked_region = np.sort(masked_region.flatten())
+                min_val = sort_masked_region[10]
+                max_val = sort_masked_region[-10]
+                
+                if min_val == max_val:
+                    # Handle uniform values
+                    depth[bool_mask] = 0
+                else:
+                    # Normalize only the masked region
+                    depth[bool_mask] = (masked_region - min_val) / (max_val - min_val)
+                    depth[depth < 0] = 0
+                    depth[depth > 1] = 1
+                    # depth[bool_mask] -= 0.005
+                    # depth[depth < 0] = 0
+            new_depth = np.ones_like(depth)
+            depth = new_depth * (1 - mask_) + depth
+                
         elif self.depth_sim2real == 'v0':
             depth += (self.sim_camera_height - self.real_camera_height)
             masked_depth = depth * mask

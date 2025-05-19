@@ -2,6 +2,7 @@ import time
 import select
 import sys
 
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import pyrealsense2 as rs
@@ -19,7 +20,8 @@ import torch
 import signal
 from segment_anything import SamPredictor, sam_model_registry, SamAutomaticMaskGenerator
 from segment_anything import sam_model_registry
-from agent_arena.utilities.visualisation_utils import draw_pick_and_place, filter_small_masks
+from agent_arena.utilities.visual_utils \
+    import draw_pick_and_place, filter_small_masks
 
 import subprocess
 import shlex
@@ -98,7 +100,7 @@ def get_mask_v2(mask_generator, rgb):
         final_mask = None
         max_color_difference = 0
         print('Processing mask results...')
-        save_color(rgb, 'rgb')
+        save_color(rgb, 'rgb', './tmp')
         mask_data = []
 
         # Iterate over each generated mask result
@@ -107,7 +109,7 @@ def get_mask_v2(mask_generator, rgb):
             mask_shape = rgb.shape[:2]
 
             ## count no mask corner of the mask
-            margin = 5
+            margin = 5 #5
             mask_corner_value = 1.0*segmentation_mask[margin, margin] + 1.0*segmentation_mask[margin, -margin] + \
                                 1.0*segmentation_mask[-margin, margin] + 1.0*segmentation_mask[-margin, -margin]
             
@@ -157,9 +159,17 @@ def get_mask_v2(mask_generator, rgb):
                 'mask_region_size': mask_region_size,
             })
         
-        top_5_masks = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[:3]
+        top_num = 3
+        top_5_masks = sorted(mask_data, key=lambda x: x['color_difference'], reverse=True)[:top_num]
         final_mask_data = sorted(top_5_masks, key=lambda x: x['mask_region_size'], reverse=True)[0]
         final_mask = final_mask_data['mask']
+
+        ## make the margine of the final mask to be 0
+        margin = 5
+        final_mask[:margin, :] = 0
+        final_mask[-margin:, :] = 0
+        final_mask[:, :margin] = 0
+        final_mask[:, -margin:] = 0
 
         ## print the average color of the mask background
         masked_region = np.expand_dims(final_mask, -1) * rgb
@@ -182,7 +192,7 @@ def get_mask_v1(mask_generator, rgb):
     final_mask = None
     max_color_difference = 0
     print('Processing mask results...')
-    save_color(rgb, 'rgb')
+    save_color(rgb, 'rgb', './tmp')
     mask_data = []
 
     # Iterate over each generated mask result
@@ -306,33 +316,98 @@ def get_mask_generator():
 
     ### Masking Model Macros ###
     MODEL_TYPE = "vit_h"
-    sam = sam_model_registry[MODEL_TYPE](checkpoint='sam_vit_h_4b8939.pth')
+    sam = sam_model_registry[MODEL_TYPE](
+        checkpoint=os.path.join(
+            os.environ['ROBOT_CONTROL_CLOTH_DIR'], 'interface', 'sam_vit_h_4b8939.pth'))
+
     sam.to(device=DEVICE)
     return SamAutomaticMaskGenerator(sam)
 
 
-def get_orientation(point, mask):
+# def get_orientation(point, mask):
+#     mask = (mask > 0).astype(np.uint8)
+    
+#     # Compute gradients
+#     grad_y = sobel(mask, axis=0)
+#     grad_x = sobel(mask, axis=1)
+    
+#     x, y = point
+    
+#     # Calculate orientation
+#     gx = grad_x[y, x]
+#     gy = grad_y[y, x]
+#     orientation_rad = np.arctan2(gy, gx)
+    
+#     # Convert orientation to degrees
+#     orientation_deg = np.degrees(orientation_rad)
+    
+#     # Normalize to range [0, 360)
+#     orientation_deg = (orientation_deg - 90 + 360) % 360
+    
+#     return orientation_deg
+
+def get_orientation(point, mask, window_size=21):
+    # Ensure mask is binary
     mask = (mask > 0).astype(np.uint8)
     
-    # Compute gradients
-    grad_y = sobel(mask, axis=0)
-    grad_x = sobel(mask, axis=1)
-    
+    # Extract a window around the point
     x, y = point
+    half_window = window_size // 2
+    window = mask[max(0, y-half_window):min(mask.shape[0], y+half_window+1),
+                  max(0, x-half_window):min(mask.shape[1], x+half_window+1)]
+    
+    # Compute gradients
+    grad_y = sobel(window, axis=0)
+    grad_x = sobel(window, axis=1)
+
+    if np.all(grad_x == 0) and np.all(grad_y == 0):
+        return 0.0  # Return 0 degrees if no gradient
+    
+    # Compute orientation using Principal Component Analysis (PCA)
+    cov = np.cov(np.array([grad_x.ravel(), grad_y.ravel()]))
+    eigenvalues, eigenvectors = np.linalg.eig(cov)
+    
+    # The eigenvector corresponding to the smaller eigenvalue 
+    # gives the direction perpendicular to the dominant edge
+    idx = eigenvalues.argsort()[::-1]
+    eigenvectors = eigenvectors[:, idx]
     
     # Calculate orientation
-    gx = grad_x[y, x]
-    gy = grad_y[y, x]
-    orientation_rad = np.arctan2(gy, gx)
+    orientation_rad = np.arctan2(eigenvectors[1, 1], eigenvectors[0, 1])
     
     # Convert orientation to degrees
     orientation_deg = np.degrees(orientation_rad)
     
     # Normalize to range [0, 360)
-    orientation_deg = (orientation_deg - 90 + 360) % 360
+    orientation_deg = (orientation_deg + 360) % 360 - 180
     
     return orientation_deg
 
+def refine_orientation(point, mask, initial_orientation, refinement_angle=10, num_steps=21):
+    x, y = point
+    best_orientation = initial_orientation
+    max_sum = 0
+    
+    for angle in np.linspace(initial_orientation - refinement_angle, 
+                             initial_orientation + refinement_angle, num_steps):
+        line_points = get_line_points(point, angle, length=20)
+        line_sum = sum(mask[py, px] for px, py in line_points if 0 <= py < mask.shape[0] and 0 <= px < mask.shape[1])
+        
+        if line_sum > max_sum:
+            max_sum = line_sum
+            best_orientation = angle
+    
+    return best_orientation
+
+def get_line_points(start, angle, length):
+    x, y = start
+    rad = np.radians(angle)
+    return [(int(x + i * np.cos(rad)), int(y + i * np.sin(rad))) for i in range(length)]
+
+def improved_get_orientation(point, mask):
+    initial_orientation = get_orientation(point, mask)
+    refined_orientation = refine_orientation(point, mask, initial_orientation)
+    return refined_orientation
 
 def stop_ffmpeg_recording(process):
     """
@@ -438,20 +513,59 @@ def imgmsg_to_cv2_custom(img_msg, encoding="bgr8"):
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
     elif encoding == "mono8":
         image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    elif encoding == "8UC1":
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
     return image
 
 def save_color(img, filename='color', directory="."):
+    print('save color img' , img.shape)
     img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     cv2.imwrite('{}/{}.png'.format(directory, filename), img_bgr)
 
-def save_depth(depth, filename='depth', directory=".", colour=False):
-    depth = (depth - np.min(depth))/(np.max(depth) - np.min(depth))
+def save_depth(depth, filename='depth', directory=".", colour=False, remap=True):
+    if remap:
+        depth = (depth - np.min(depth))/(np.max(depth) - np.min(depth))
+    
     if colour:
         depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_JET)
     else:
         depth = np.uint8(255 * depth)
+    
     cv2.imwrite('{}/{}.png'.format(directory, filename), depth)
+
+def save_depth_distribution(depth_image, filename='depth_distribution', directory="."):
+    """
+    Saves a histogram of depth values from a depth image to a PNG file.
+
+    Parameters:
+        depth_image (numpy.ndarray): A 2D array representing the depth image.
+        filename (str): The name of the output file (without extension). Default is 'depth_distribution'.
+        directory (str): The directory where the file will be saved. Default is the current directory (".").
+    """
+    # Ensure the directory exists
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    
+    # Compute histogram with 100 bins
+    depth_image = depth_image.flatten()
+    hist, bins = np.histogram(depth_image, bins=100)
+    print('hist', hist)
+    print('bins', bins)
+    
+    # Compute bin centers for better alignment in the bar plot
+    bin_centers = (bins[:-1] + bins[1:]) / 2
+    
+    # Plot and save histogram
+    plt.figure()
+    plt.bar(bin_centers, hist, width=np.diff(bins), align='center')
+    plt.xlabel('Depth Value')
+    plt.ylabel('Frequency')
+    plt.yscale('log')
+    plt.title('Depth Distribution')
+    plt.savefig(f'{directory}/{filename}.png')
+    plt.close()
+
 
 def save_mask(mask, filename='mask', directory="."):
     mask = mask.astype(np.int8)*255

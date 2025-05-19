@@ -11,11 +11,13 @@ from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
 
-from utils import *
+from .utils import *
 
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',
-                 adjust_pick=False, adjust_orien=False, video_device='/dev/video6', save_dir='.'):
+                 adjust_pick=False, adjust_orien=False, 
+                 video_device='/dev/video6', 
+                 save_dir='.'):
         super().__init__(f"{name}_interface")
         self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
         self.pnp_pub = self.create_publisher(NormPixelPnP, '/norm_pixel_pnp', 10)
@@ -33,7 +35,6 @@ class ControlInterface(Node):
         self.adjust_orient = adjust_orien
         self.video_device = video_device
         self.video_process = None
-
         if 'folding' in task:
             self.collect_demo = False
             self.demo_states = []
@@ -70,7 +71,7 @@ class ControlInterface(Node):
         
 
         os.makedirs(save_dir, exist_ok=True)
-        print('rgb shape', rgb.shape)
+        # print('rgb shape', rgb.shape)
         save_color(rgb, filename='rgb', directory=save_dir)
         
         save_depth(depth, filename='depth', directory=save_dir)
@@ -96,20 +97,66 @@ class ControlInterface(Node):
         if 'raw_rgb' in state['observation']:
             raw_rgb = state['observation']['raw_rgb']
             save_color(raw_rgb, filename='raw_rgb', directory=save_dir)
+        
+        if 'workspace_mask' in state['observation']:
+            workspace_mask = state['observation']['workspace_mask'][:, :, None]
+            rgb = state['observation']['rgb']
+
+            alpha = 0.3
+            rgb = rgb.astype(np.float32)/255
+            rgb = rgb*workspace_mask + alpha*rgb*(1-workspace_mask)
+            rgb = (rgb * 255).astype(np.uint8)
+            save_color(rgb, filename='workspace_rgb', directory=save_dir)
+
+        print('state', state.keys())
 
         if 'input_obs' in state:
             input_obs = state['input_obs']
             input_type = state['input_type']
             print('input_obs', input_obs.shape)
             if input_type == 'rgb':
+                input_obs = (input_obs * 255).clip(0, 255).astype(np.uint8)
                 save_color(input_obs, filename='input_obs_rgb', directory=save_dir)
             elif input_type == 'depth':
-                save_depth(input_obs, filename='input_obs_depth', directory=save_dir)
-                save_depth(input_obs, filename='input_obs_colour_depth', directory=save_dir, colour=True)
+                print('max depth', np.max(input_obs))
+                print('min depth', np.min(input_obs))
+                ## save a plot for the distribution of the depth
+                save_depth_distribution(input_obs, filename='input_obs_depth_distribution', directory=save_dir)
+
+                save_depth(input_obs, filename='input_obs_depth', directory=save_dir, remap=False)
+                save_depth(input_obs, filename='input_obs_colour_depth', directory=save_dir, colour=True, remap=False)
             elif input_type == 'rgbd':
-                save_color(input_obs[:, :, :3], filename='input_obs_rgb', directory=save_dir)
+                print('input_obs', input_obs.shape)
+                rgb = input_obs[:, :, :3].copy().clip(0, 255).astype(np.uint8)
+                save_color(rgb, filename='input_obs_rgb', directory=save_dir)
                 save_depth(input_obs[:, :, 3], filename='input_obs_depth', directory=save_dir)
                 save_depth(input_obs[:, :, 3], filename='input_obs_colour_depth', directory=save_dir, colour=True)
+        
+        if 'denoise_action_input_obs_rgb' in state:
+            denoise_action_input_obs_rgb = state['denoise_action_input_obs_rgb']
+            save_color(denoise_action_input_obs_rgb, filename='denoise_action_input_obs_rgb', directory=save_dir)
+        
+        if 'denoise_action_rgb' in state:
+            denoise_action_rgb = state['denoise_action_rgb']
+            save_color(denoise_action_rgb, filename='denoise_action_rgb', directory=save_dir)
+
+        if 'grasp_image' in state:
+            grasp_image = state['grasp_image']
+            save_color(grasp_image, filename='grasp_image', directory=save_dir)
+
+        if 'action_obs_rgb' in state:
+            action_obs_rgb = state['action_obs_rgb']
+            save_color(action_obs_rgb, filename='action_obs_rgb', directory=save_dir)
+        
+        if 'noise_actions_obs_depth' in state:
+            noise_actions_obs_depth = state['noise_actions_obs_depth']
+            save_color(noise_actions_obs_depth, filename='noise_actions_obs_depth', directory=save_dir)
+
+        if 'denoise_depth_frames' in state:
+            from agent_arena.utilities.visual_utils import save_numpy_as_gif
+            file_dir = os.path.join(save_dir, 'denoise_depth_frames')
+            save_numpy_as_gif(state['denoise_depth_frames'], file_dir)
+            #save_frames(, directory=save_dir, filename='denoise_depth_frames')
 
         if 'action' in state:
             action = state['action']
@@ -205,7 +252,7 @@ class ControlInterface(Node):
         is_continue = input('[User Attention!] Please set a random initial state, and enter any keys after setup to continue!')
         
 
-    def clean_up(self, state):
+    def end_trial(self, state):
         self.stop_video()
 
         while True:
@@ -227,8 +274,9 @@ class ControlInterface(Node):
         crop_rgb = imgmsg_to_cv2_custom(data.crop_rgb, "bgr8")
         crop_depth = imgmsg_to_cv2_custom(data.crop_depth, "64FC1")
         raw_rgb = imgmsg_to_cv2_custom(data.raw_rgb, "bgr8")
+        workspace = imgmsg_to_cv2_custom(data.workspace_mask, "mono8")
         self.real_camera_height = data.camera_height
-        input_state = self.post_process(crop_rgb, crop_depth, raw_rgb)
+        input_state = self.post_process(crop_rgb, crop_depth, workspace, raw_rgb)
 
         if self.step == -1:
             self.step += 1
@@ -248,7 +296,7 @@ class ControlInterface(Node):
             done = True
 
         if done:
-            self.clean_up(input_state)
+            self.end_trial(input_state)
             return
         elif self.step == 0:
             self.init(input_state)
@@ -264,13 +312,15 @@ class ControlInterface(Node):
 
         self.last_action = action
         pick_and_place = action['pick-and-place']
-        pixel_actions = ((pick_and_place + 1) / 2 * self.resolution[0]).astype(int).reshape(4)
+        H, W, _ = save_state['observation']['rgb'].shape
+        pixel_actions = ((pick_and_place.reshape(-1, 2) + 1) / 2 * np.asarray([W, H])).astype(int).reshape(4)
         action_image = draw_pick_and_place(
             save_state['observation']['rgb'],
             tuple(pixel_actions[:2]),
             tuple(pixel_actions[2:]),
-            color=(0, 255, 0)
-        ).astype(np.uint8)
+            color=(0, 0, 255),
+            swap=True,
+        ).get().astype(np.uint8)
         action['pick-and-place'] = action['pick-and-place'].reshape(4).tolist()
         #print('save actio', action)
         save_state['action'] = action
@@ -359,5 +409,5 @@ class ControlInterface(Node):
         self.reset()
         rclpy.spin(self)
 
-    def post_process(self, rgb, depth, raw_rgb=None, pointcloud=None):
+    def post_process(self, rgb, depth, workspace, raw_rgb=None, pointcloud=None):
         pass

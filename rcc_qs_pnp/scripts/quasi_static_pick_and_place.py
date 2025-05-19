@@ -67,7 +67,32 @@ class QuasiStaticPickAndPlace(Node):
         self.create_subscription(Header, '/reset', self.reset_callback, 10)
         self.rate = self.create_rate(10)
             
+    def process_workspace_mask(self):
+
+        # go through each pixel on the image and check if it is in the workspace
+        self.logger.info(f"Camera intrinsic {self.camera_intrinstic}")
+
+        W = self.camera_intrinstic.width
+        H = self.camera_intrinstic.height
+
+        # get the x, y positions of each pixel
+        pixels = np.indices((H, W)).reshape(2, -1).T
+        pixels[:, [0, 1]] = pixels[:, [1, 0]]
+        depths = [self.camera_height for _ in range(H*W)]
+        world_poses = pixel2base(pixels, self.camera_intrinstic, 
+                                  self.camera_pos, depths).reshape(H, W ,3)
+        distances = np.linalg.norm(world_poses, axis=2)
         
+        workspace_mask = np.zeros((H, W))
+        workspace_mask[distances < self.config.work_R] = 1
+        workspace_mask[distances < self.config.work_r] = 0
+        workspace_mask = workspace_mask.astype(bool)
+        save_mask(workspace_mask, filename='workspace_mask', direcotry="./tmp")
+
+        workspace_mask = workspace_mask[self.start_y:self.end_y, self.start_x:self.end_x]
+        save_mask(workspace_mask, filename='workspace_mask_after_crop', direcotry="./tmp")
+
+        return workspace_mask
 
     def pnp_callback(self, pnp):
         print("Received pnp: %s", pnp.data)
@@ -299,13 +324,13 @@ class QuasiStaticPickAndPlace(Node):
         # self.py_off = (H - min_val)//2
         self.resol = self.config.crop_resol
         
-        mid_x =  W//2
-        mid_y = H//2
+        # mid_x =  W//2
+        # mid_y = H//2
         # Calculate the coordinates of the cropping rectangle
         self.start_x = self.config.crop_start_x
         self.start_y = self.config.crop_start_y
-        self.end_x = self.start_x + self.config.crop_resol + 1
-        self.end_y = self.start_y + self.config.crop_resol + 1
+        self.end_x = self.start_x + self.config.crop_resol[0] + 1
+        self.end_y = self.start_y + self.config.crop_resol[1] + 1
 
         self.logger.info(f'crop image resol {self.resol}, start_x {self.start_x}, start_y {self.start_y }')
 
@@ -346,13 +371,16 @@ class QuasiStaticPickAndPlace(Node):
         
         crop_rgb, crop_depth = self.take_cropped_rgbd()
         raw_rgb, raw_depth = self.camera.take_rgbd()
+        workspace_mask = self.process_workspace_mask()
+
         #pointcloud = self.get_pointcloud()
 
         return {
             'crop_depth': crop_depth,
             'crop_rgb': crop_rgb,
             'raw_rgb': raw_rgb,
-            'raw_depth': raw_depth
+            'raw_depth': raw_depth,
+            'workspace_mask': workspace_mask
             #'pointcloud': pointcloud
         }
 
@@ -369,6 +397,8 @@ class QuasiStaticPickAndPlace(Node):
         raw_rgb_msg = self.bridge.cv2_to_imgmsg(observation['raw_rgb'], encoding="bgr8")
         raw_depth_msg = self.bridge.cv2_to_imgmsg(observation['raw_depth'], encoding="64FC1")
         
+        workspace_mask_msg = self.bridge.cv2_to_imgmsg(
+            observation['workspace_mask'].astype(np.uint8), encoding="mono8")
 
         # Create the custom RGBD message
         obs_msg = Observation()
@@ -380,13 +410,12 @@ class QuasiStaticPickAndPlace(Node):
         obs_msg.raw_rgb = raw_rgb_msg
         obs_msg.raw_depth = raw_depth_msg
         obs_msg.camera_height = self.camera_height
-        
+        obs_msg.workspace_mask = workspace_mask_msg
 
         # Publish the message
         self.get_logger().info("Publishing RGBD image")
         self.pub.publish(obs_msg)
         self.get_logger().info("Published")
-        #self.rate.sleep()
 
     def publish_observation(self):
         obs = self.get_observation()
@@ -408,7 +437,8 @@ class QuasiStaticPickAndPlace(Node):
         # print('resol', self.resol)
         # print('py off', self.py_off)
         # print('px off', self.py_off)
-        pix_pnp = (pnp+1)/2 * self.resol
+        W, H = self.resol
+        pix_pnp = (pnp+1)/2 * np.asarray([W, H, W, H])
         pix_pnp[0] += self.start_x
         pix_pnp[2] += self.start_x
         pix_pnp[1] += self.start_y
@@ -493,7 +523,7 @@ class QuasiStaticPickAndPlace(Node):
 
 if __name__ == '__main__':
     # Check if a config name is provided as a command-line argument
-    config_name = "ur3e_active_realsense_standrews"  # Use a default config name if none is provided
+    config_name = "ur3e_active_realsense_standrews_workspace"  # Use a default config name if none is provided
     # Load configuration from the YAML file
     config = load_config(config_name)
 
@@ -504,11 +534,6 @@ if __name__ == '__main__':
     qspnp = QuasiStaticPickAndPlace(config=config, mock=False) #, estimate_pick_depth=True)
 
     qspnp.run()
-    #qspnp.test_world_pick_and_place()
-    #qspnp.test_camera(crop=True)
-    #qspnp.test_pixel_pick_and_place([1, 1, -1, -1])
-    # qspnp.test_pixel_pick_and_place()
-    
 
 
     rclpy.shutdown()

@@ -216,6 +216,9 @@ class ControlInterface(Node):
             self.max_mask_pixels = int(np.sum(current_mask))
             save_dir = os.path.join(self.save_dir, self.trj_name, 'goals', f'step_0')
             self._save_step(state, save_dir)
+            self.goal_mask = state['observation']['mask']
+            self.goal_rgb = state['observation']['rgb']
+            self.goal_depth = state['observation']['depth']
             
         elif 'folding' in self.task:
             self.demo_states.append(state)
@@ -243,6 +246,7 @@ class ControlInterface(Node):
                     self._save_step(state, save_dir)
                 
                 self.goal_mask = self.demo_states[-1]['observation']['mask']
+                self.goal_rgb = self.demo_states[-1]['observation']['rgb']
         
         self.setup_init_state()
         self.start_video()

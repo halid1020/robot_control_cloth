@@ -36,10 +36,11 @@ class AgentArenaInterface(ControlInterface):
                  mask_sim2real='v2',
                  sim_camera_height=0.65,
                  callback_on_internal_states=None,
+                 goal_conditioned=False,
                  save_dir='.'):
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
                          name='agent', adjust_orien=adjust_orien, save_dir=save_dir)
-
+        self.goal_conditioned = goal_conditioned    
         self.agent = agent
         self.internal_states = []
         self.callback_on_internal_states = callback_on_internal_states
@@ -293,7 +294,7 @@ class AgentArenaInterface(ControlInterface):
                 'rgb': rgb.copy(),
                 'depth': depth.copy(),
                 'mask': mask.copy(),
-                'workspace_mask': workspace.copy()[:, :, 0]
+                'workspace_mask': workspace.copy()[:, :, 0],
             },
             'action_space': Box(
                 -np.ones((1, 4)).astype(np.float32),
@@ -302,6 +303,13 @@ class AgentArenaInterface(ControlInterface):
             'sim2real': True,
             'task': self.task,
         }
+
+        if self.goal_conditioned and self.step != -1:
+            state['goal'] = {
+                'rgb': self.goal_rgb.copy(),
+                'mask': self.goal_mask.copy(),
+                'depth': self.goal_depth.copy(),
+            }
 
         if raw_rgb is not None:
             raw_rgb = raw_rgb[100:-100, 150:-150]

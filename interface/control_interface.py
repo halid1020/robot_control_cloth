@@ -189,14 +189,18 @@ class ControlInterface(Node):
 
             if self.step == 0:
                 self.init_mask_pixels = cur_mask_pixels
+            
+            max_IoU, _ = get_max_IoU(state['observation']['mask'], self.goal_mask)
+            nc =  max(min(1.0, 1.0 * cur_mask_pixels/self.max_mask_pixels), 0)
 
             res = {
                 'max_coverage': self.max_mask_pixels,
                 'init_coverage': self.init_mask_pixels,
                 'coverage': cur_mask_pixels,
-                'normalised_coverage': max(min(1.0, 1.0 * cur_mask_pixels/self.max_mask_pixels), 0),
+                'normalised_coverage': nc,
                 'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
                                                 /(self.max_mask_pixels - self.init_mask_pixels), 1), 0),
+                'max_IoU': max_IoU,
                 'auto success': bool(1.0 * cur_mask_pixels/self.max_mask_pixels > 0.95),
                 'human success': False
             }

@@ -99,7 +99,7 @@ class AgentArenaInterface(ControlInterface):
     
     def end_trial(self, state):
         if self.callback_on_internal_states is not None:
-            self.callback_on_internal_states(self.internal_states)
+            self.callback_on_internal_states(self.internal_states, os.path.join(self.save_dir, self.trj_name))
         return super().end_trial(state)
     
     def act(self, state):

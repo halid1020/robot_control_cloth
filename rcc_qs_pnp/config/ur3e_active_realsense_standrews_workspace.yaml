@@ -44,7 +44,7 @@ work_r: 0.24
 robot_gripper: "active_parallel_gripper"
 
 # CAUTION!!! following value needs to be calibrated
-g2e_offset: 0.202 #0.168
+g2e_offset: 0.158 #0.168 #0.202 #0.168
 
 ###################
 ## Camera Config ##

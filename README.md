@@ -57,6 +57,8 @@ source /opt/ros/humble/setup.sh
 ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.1.15 launch_rviz:=false
 ```
 
+The above needs to be run first, otherwise the pedant will complain about the connection.
+
 2. Run the `URCaps` program in pedant, and set to `remote control`.
 
 3. Right under `<ws_name>`
@@ -103,7 +105,6 @@ ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e execut
 ```
 cd <path-to-agent-arena>
 . ./setup.sh
-source $CONDA_PREFIX/setup.bash
 ```
 
 ```

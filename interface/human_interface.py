@@ -71,7 +71,7 @@ class HumanPickAndPlace(ControlInterface):
 
         if self.adjust_pick:
             
-            adjust_pick, errod_mask = adjust_points([clicks[0]], mask.copy())
+            adjust_pick, errod_mask = adjust_points([clicks[0]], mask.copy(), 5)
             clicks[0] = adjust_pick[0]
 
         orientation = 0.0  
@@ -130,20 +130,12 @@ class HumanPickAndPlace(ControlInterface):
         }
         
         if raw_rgb is not None:
-            
-            raw_rgb = raw_rgb[self.height_offset:-self.height_offset, self.width_offset:-self.width_offset]
-            #workspace = workspace[self.height_offset:-self.height_offset, self.width_offset:-self.width_offset]
-            full_mask = get_mask_v2(self.mask_generator, raw_rgb)[self.mask_offset:-self.mask_offset, self.mask_offset:-self.mask_offset]
+            raw_rgb = raw_rgb[100:-100, 150:-150]
+            full_mask = get_mask_v2(self.mask_generator, raw_rgb)[10:-10, 10:-10]
             state['observation']['full_mask'] = full_mask
-            raw_rgb =  cv2.cvtColor(
-                raw_rgb[self.mask_offset:-self.mask_offset, self.mask_offset:-self.mask_offset], 
-                cv2.COLOR_BGR2RGB)
+            raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb
-            #state['observation']['workspace'] = workspace[self.mask_offset:-self.mask_offset, self.mask_offset:-self.mask_offset]
 
-            # print('save_dir', self.save_dir)    
-            # save_color(raw_rgb, 'raw_rgb_human', self.save_dir)
-            # save_mask(workspace, 'worspace_mask_human', self.save_dir)
 
         return state
 
@@ -151,13 +143,12 @@ def main():
     rclpy.init()
     task = 'flattening'  # Default task, replace with argument parsing if needed
     max_steps = 20  # Default max steps, replace with task-specific logic if needed
-    adjust_pick=False
-    adjust_orien=False
+    adjust_pick=True
+    adjust_orien=True
     whole_workspace=True
     sim2real = HumanPickAndPlace(task, max_steps,
-                                 adjust_pick, adjust_orien,
-                                whole_workspace=whole_workspace
-                                 )
+                                adjust_pick, adjust_orien,
+                                whole_workspace=whole_workspace)
     sim2real.run()
     rclpy.shutdown()
 

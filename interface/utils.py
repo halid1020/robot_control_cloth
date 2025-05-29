@@ -30,6 +30,17 @@ from skimage.measure import label, regionprops
 
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
+def extract_square_crop_mask(mask):
+    coords = np.argwhere(mask)
+    y_center, x_center = coords.mean(axis=0).astype(int)
+    side_length = min(mask.shape)
+    x_start = max(x_center - side_length // 2, 0)
+    y_start = max(y_center - side_length // 2, 0)
+    x_start = min(x_start, mask.shape[1] - side_length)
+    y_start = min(y_start, mask.shape[0] - side_length)
+    return mask[y_start: y_start + side_length, x_start: x_start + side_length]
+    #return (y_start, , x_start, x_start + side_length)
+
 def calculate_iou(mask1, mask2):
     if mask1.shape[0] > 128:
         mask1 = cv2.resize(mask1.astype(np.float32), (128, 128), interpolation=cv2.INTER_AREA)

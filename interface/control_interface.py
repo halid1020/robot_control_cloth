@@ -11,7 +11,7 @@ from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
 
-from .utils import *
+from utils import *
 
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',
@@ -190,7 +190,11 @@ class ControlInterface(Node):
             if self.step == 0:
                 self.init_mask_pixels = cur_mask_pixels
             
-            max_IoU, _ = get_max_IoU(state['observation']['mask'], self.goal_mask)
+            cur_mask = extract_square_crop_mask(state['observation']['mask'])
+            goal_mask = extract_square_crop_mask(self.goal_mask)
+            save_mask(cur_mask, filename='current_mask_iou', directory='tmp')
+            save_mask(goal_mask, filename='goal_mask_iou', directory='tmp')
+            max_IoU, _ = get_max_IoU(cur_mask, goal_mask)
             nc =  max(min(1.0, 1.0 * cur_mask_pixels/self.max_mask_pixels), 0)
 
             res = {

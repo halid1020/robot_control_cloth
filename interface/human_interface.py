@@ -16,7 +16,7 @@ from utils import *
 
 from control_interface import ControlInterface
 
-
+mask_treshold=220000
 class HumanPickAndPlace(ControlInterface):
     def __init__(self, task, steps=20,
                  adjust_pick=False, adjust_orien=False,
@@ -24,7 +24,7 @@ class HumanPickAndPlace(ControlInterface):
         
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
                          name='human', adjust_orien=adjust_orien, debug=debug, save_dir=save_dir)
-        #self.save_dir = f'/data/human_data/{task}'
+        self.save_dir = f'{save_dir}/{task}'
         self.whole_workspace = whole_workspace
         #self.mask_sim2real = mask_sim2real
         
@@ -106,7 +106,7 @@ class HumanPickAndPlace(ControlInterface):
         # rgb = cv2.resize(rgb, self.resolution)
         # depth = cv2.resize(depth, self.resolution)
 
-        mask_v2 = get_mask_v2(self.mask_generator, org_rgb, mask_treshold=200000)
+        mask_v2 = get_mask_v2(self.mask_generator, org_rgb, mask_treshold=mask_treshold)
         mask_v1 = get_mask_v1(self.mask_generator, org_rgb)
         mask_v0 = get_mask_v0(org_rgb) 
         
@@ -132,7 +132,7 @@ class HumanPickAndPlace(ControlInterface):
         
         if raw_rgb is not None:
             raw_rgb = raw_rgb[100:-100, 150:-150]
-            full_mask = get_mask_v2(self.mask_generator, raw_rgb)[10:-10, 10:-10]
+            full_mask = get_mask_v2(self.mask_generator, raw_rgb, mask_treshold=mask_treshold)[10:-10, 10:-10]
             state['observation']['full_mask'] = full_mask
             raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb
@@ -146,7 +146,7 @@ def parse_arguments():
     parser.add_argument('--task', default='flattening')
     parser.add_argument('--domain', default='sim2real-rect-fabric')
 
-    parser.add_argument('--save_dir', default='/data/human')
+    parser.add_argument('--save_dir', default='/data/human_data')
     #parser.add_argument('--store_interm', action='store_true', help='store intermediate results')
     parser.add_argument('--eval_checkpoint', default=-1, type=int)
 

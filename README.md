@@ -100,6 +100,15 @@ source ./rcc_build/install/setup.sh
 ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:=test_whole_system.py
 ```
 
+5. Hand-Eye calibration
+
+```
+source /opt/ros/humble/setup.bash
+source ./rcc_build/install/setup.sh
+
+ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:=hand_eye_calibrator.py
+```
+
 ## V. Build and Run integration with `agent-arena`
 1. Build
 ```

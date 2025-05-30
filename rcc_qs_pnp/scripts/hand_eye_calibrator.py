@@ -271,7 +271,7 @@ class HandEyeCalibrator(Node):
 
 if __name__ == '__main__':
     # Check if a config name is provided as a command-line argument
-    config_name = "ur3e_active_realsense_standrews"  # Use a default config name if none is provided
+    config_name = "ur3e_active_realsense_standrews_workspace"  # Use a default config name if none is provided
     # Load configuration from the YAML file
     config = load_config(config_name)
 

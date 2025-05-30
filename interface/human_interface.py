@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 import cv2
+import argparse
 
 from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
@@ -19,14 +20,14 @@ from control_interface import ControlInterface
 class HumanPickAndPlace(ControlInterface):
     def __init__(self, task, steps=20,
                  adjust_pick=False, adjust_orien=False,
-                 whole_workspace=False):
+                 whole_workspace=False, debug=False, save_dir='/data/human_data'):
         
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
-                         name='human', adjust_orien=adjust_orien)
-        self.save_dir = f'/data/human_data/{task}'
+                         name='human', adjust_orien=adjust_orien, debug=debug, save_dir=save_dir)
+        #self.save_dir = f'/data/human_data/{task}'
         self.whole_workspace = whole_workspace
         #self.mask_sim2real = mask_sim2real
-        os.makedirs(self.save_dir, exist_ok=True)
+        
 
         self.width_offset = 150
         self.height_offset = 100
@@ -105,7 +106,7 @@ class HumanPickAndPlace(ControlInterface):
         # rgb = cv2.resize(rgb, self.resolution)
         # depth = cv2.resize(depth, self.resolution)
 
-        mask_v2 = get_mask_v2(self.mask_generator, org_rgb)
+        mask_v2 = get_mask_v2(self.mask_generator, org_rgb, mask_treshold=200000)
         mask_v1 = get_mask_v1(self.mask_generator, org_rgb)
         mask_v0 = get_mask_v0(org_rgb) 
         
@@ -139,16 +140,46 @@ class HumanPickAndPlace(ControlInterface):
 
         return state
 
+def parse_arguments():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--task', default='flattening')
+    parser.add_argument('--domain', default='sim2real-rect-fabric')
+
+    parser.add_argument('--save_dir', default='/data/human')
+    #parser.add_argument('--store_interm', action='store_true', help='store intermediate results')
+    parser.add_argument('--eval_checkpoint', default=-1, type=int)
+
+    ## Sim2Real Protocol
+    parser.add_argument('--depth_sim2real', default='v2')
+    parser.add_argument('--mask_sim2real', default='v2')
+    parser.add_argument('--sim_camera_height', default=0.65, type=float)
+
+    ## Grasping Protocol
+    parser.add_argument('--disable_adj_pick', action='store_true')
+    parser.add_argument('--disable_adj_orient', action='store_true')
+
+    # Debug
+    parser.add_argument('--debug', action='store_true')
+
+
+
+
+    return parser.parse_args()
+
 def main():
+    args = parse_arguments()
     rclpy.init()
     task = 'flattening'  # Default task, replace with argument parsing if needed
     max_steps = 20  # Default max steps, replace with task-specific logic if needed
-    adjust_pick=True
-    adjust_orien=True
+    adjust_pick= not args.disable_adj_pick
+    adjust_orien= not args.disable_adj_orient
     whole_workspace=True
     sim2real = HumanPickAndPlace(task, max_steps,
                                 adjust_pick, adjust_orien,
-                                whole_workspace=whole_workspace)
+                                whole_workspace=whole_workspace,
+                                save_dir=args.save_dir,
+                                debug=args.debug)
     sim2real.run()
     rclpy.shutdown()
 

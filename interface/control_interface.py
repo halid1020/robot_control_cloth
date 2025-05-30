@@ -6,6 +6,7 @@ from rclpy.node import Node
 import numpy as np
 import cv2
 import json
+import threading
 
 from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
@@ -16,7 +17,7 @@ from utils import *
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',
                  adjust_pick=False, adjust_orien=False, 
-                 video_device='/dev/video6', 
+                 video_device='/dev/video6', debug=False,
                  save_dir='.'):
         super().__init__(f"{name}_interface")
         self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
@@ -27,6 +28,8 @@ class ControlInterface(Node):
         self.mask_generator = get_mask_generator()
         self.task = task
         self.save_dir = save_dir
+        self.debug = debug
+        os.makedirs(self.save_dir, exist_ok=True)
       
         self.step = -1
         self.last_action = None
@@ -178,7 +181,16 @@ class ControlInterface(Node):
         #color_depth = cv2.applyColorMap(np.uint8(255 * depth), cv2.COLORMAP_AUTUMN)
         save_dir = os.path.join(self.save_dir, self.trj_name, f'step_{str(self.step)}')
 
-        self._save_step(state, save_dir)
+        #self._save_step(state, save_dir)
+
+        # Define a target function for the thread
+        def background_save():
+            self._save_step(state, save_dir)
+
+        # Start the background thread
+        thread = threading.Thread(target=background_save)
+        thread.daemon = True  # Optional: dies with the program
+        thread.start()
         
 
     def evaluate(self, state):
@@ -192,8 +204,9 @@ class ControlInterface(Node):
             
             cur_mask = extract_square_crop_mask(state['observation']['mask'])
             goal_mask = extract_square_crop_mask(self.goal_mask)
-            save_mask(cur_mask, filename='current_mask_iou', directory='tmp')
-            save_mask(goal_mask, filename='goal_mask_iou', directory='tmp')
+            if self.debug:
+                save_mask(cur_mask, filename='current_mask_iou', directory='tmp')
+                save_mask(goal_mask, filename='goal_mask_iou', directory='tmp')
             max_IoU, _ = get_max_IoU(cur_mask, goal_mask)
             nc =  max(min(1.0, 1.0 * cur_mask_pixels/self.max_mask_pixels), 0)
 
@@ -212,7 +225,8 @@ class ControlInterface(Node):
             return res
         elif 'folding' in self.task:
             IoU, matched_mask = get_IoU(state['observation']['mask'], self.goal_mask)
-            save_mask(matched_mask, filename='matched_mask', directory='tmp')
+            if self.debug:
+                save_mask(matched_mask, filename='matched_mask', directory='tmp')
             return {
                 'human success': False, 
                 'auto success': bool(IoU > 0.9),

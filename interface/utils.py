@@ -194,7 +194,7 @@ def get_IoU(mask1, mask2):
 
     return max_iou, best_mask
 
-def get_mask_v2(mask_generator, rgb):
+def get_mask_v2(mask_generator, rgb, mask_treshold=160000):
         """
         Generate a mask for the given RGB image that is most different from the background.
         
@@ -260,7 +260,7 @@ def get_mask_v2(mask_generator, rgb):
                 orginal_mask = 1 - orginal_mask
             
             mask_region_size = np.sum(orginal_mask == 1)
-            if mask_region_size > 160000:
+            if mask_region_size > mask_treshold:
                 continue
 
             mask_data.append({

@@ -16,7 +16,7 @@ from utils import *
 
 from control_interface import ControlInterface
 
-mask_treshold=220000
+
 class HumanPickAndPlace(ControlInterface):
     def __init__(self, task, steps=20,
                  adjust_pick=False, adjust_orien=False,
@@ -106,9 +106,9 @@ class HumanPickAndPlace(ControlInterface):
         # rgb = cv2.resize(rgb, self.resolution)
         # depth = cv2.resize(depth, self.resolution)
 
-        mask_v2 = get_mask_v2(self.mask_generator, org_rgb, mask_treshold=mask_treshold)
-        mask_v1 = get_mask_v1(self.mask_generator, org_rgb)
-        mask_v0 = get_mask_v0(org_rgb) 
+        mask_v2 = get_mask_v2(self.mask_generator, org_rgb, mask_treshold=MASK_THRESHOLD_V2)
+        # mask_v1 = get_mask_v1(self.mask_generator, org_rgb)
+        # mask_v0 = get_mask_v0(org_rgb) 
         
         #rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
         org_rgb =  cv2.cvtColor(org_rgb, cv2.COLOR_BGR2RGB)
@@ -123,8 +123,8 @@ class HumanPickAndPlace(ControlInterface):
                 'rgb': rgb.copy(),
                 'depth': norm_depth.copy(),
                 'mask': mask_v2.copy(),
-                'mask_v1': mask_v1.copy(),
-                'mask_v0': mask_v0.copy(),
+                # 'mask_v1': mask_v1.copy(),
+                # 'mask_v0': mask_v0.copy(),
                 'mask_v2': mask_v2.copy(),
                 'workspace': workspace.copy()
             }
@@ -132,7 +132,10 @@ class HumanPickAndPlace(ControlInterface):
         
         if raw_rgb is not None:
             raw_rgb = raw_rgb[100:-100, 150:-150]
-            full_mask = get_mask_v2(self.mask_generator, raw_rgb, mask_treshold=mask_treshold)[10:-10, 10:-10]
+            if self.whole_workspace:
+                full_mask = mask_v2[10:-10, 10:-10]
+            else:
+                full_mask = get_mask_v2(self.mask_generator, raw_rgb, mask_treshold=MASK_THRESHOLD_V2)[10:-10, 10:-10]
             state['observation']['full_mask'] = full_mask
             raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb

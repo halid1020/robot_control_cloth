@@ -12,7 +12,7 @@ from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
 
-from utils import *
+from .utils import *
 
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',
@@ -193,7 +193,7 @@ class ControlInterface(Node):
         thread.start()
         
 
-    def evaluate(self, state):
+    def evaluate(self, state): ## TODO: we can call this function as parallel.
         if self.task == 'flattening':
             current_mask = state['observation']['full_mask']
             cur_mask_pixels = int(np.sum(current_mask))
@@ -241,7 +241,9 @@ class ControlInterface(Node):
             self.goal_mask = state['observation']['mask']
             self.goal_rgb = state['observation']['rgb']
             self.goal_depth = state['observation']['depth']
+
             
+                
         elif 'folding' in self.task:
             self.demo_states.append(state)
         
@@ -309,6 +311,15 @@ class ControlInterface(Node):
             self.setup_evaluation(input_state)
             
             return
+        
+        input_state['goal'] = {
+            'rgb': self.goal_rgb.copy(),
+            'mask': self.goal_mask.copy(),
+            'depth': self.goal_depth.copy(),
+        }
+
+        for k, v in input_state['goal'].items():
+            input_state['observation'][f"goal-{k}"] = v
 
         evaluation = self.evaluate(input_state)
 
@@ -344,7 +355,7 @@ class ControlInterface(Node):
             save_state['observation']['rgb'],
             tuple(pixel_actions[:2]),
             tuple(pixel_actions[2:]),
-            color=(0, 0, 255),
+            color=(0, 136, 0),
             swap=True,
         ).get().astype(np.uint8)
         action['pick-and-place'] = action['pick-and-place'].reshape(4).tolist()

@@ -36,6 +36,7 @@ class AgentArenaInterface(ControlInterface):
                  mask_sim2real='v2',
                  sim_camera_height=0.65,
                  callback_on_internal_states=None,
+                 whole_workspace=False,
                  goal_conditioned=False,
                  save_dir='.'):
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
@@ -44,6 +45,7 @@ class AgentArenaInterface(ControlInterface):
         self.agent = agent
         self.internal_states = []
         self.callback_on_internal_states = callback_on_internal_states
+        self.whole_workspace = whole_workspace
         # print('Max steps {}'.format(steps))
         #  ### Initialise Ros
         # self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
@@ -227,7 +229,7 @@ class AgentArenaInterface(ControlInterface):
         # rgb = cv2.resize(rgb, self.resolution)
         # depth = cv2.resize(depth, self.resolution)
         if self.mask_sim2real == 'v2':
-            mask = get_mask_v2(self.mask_generator, rgb)
+            mask = get_mask_v2(self.mask_generator, rgb, mask_treshold=MASK_THRESHOLD_V2)
 
         rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
 
@@ -304,16 +306,18 @@ class AgentArenaInterface(ControlInterface):
             'task': self.task,
         }
 
-        if self.goal_conditioned and self.step != -1:
-            state['goal'] = {
-                'rgb': self.goal_rgb.copy(),
-                'mask': self.goal_mask.copy(),
-                'depth': self.goal_depth.copy(),
-            }
+        #if self.goal_conditioned and self.step != -1:
+        
+        
+        # for k, v in state['goal'].items():
+        #     state['observation'][f"goal-{k}"] = v
 
-        if raw_rgb is not None:
+        if self.whole_workspace:
+            state['observation']['full_mask'] = mask
+            state['observation']['raw_rgb'] = rgb
+        elif raw_rgb is not None:
             raw_rgb = raw_rgb[100:-100, 150:-150]
-            full_mask = get_mask_v2(self.mask_generator, raw_rgb)[10:-10, 10:-10]
+            full_mask = get_mask_v2(self.mask_generator, raw_rgb, mask_treshold=MASK_THRESHOLD_V2)[10:-10, 10:-10]
             state['observation']['full_mask'] = full_mask
             raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb

@@ -129,7 +129,6 @@ source install/setup.sh
 ```
 cd <path-to-agent-arena>
 . ./setup.sh
-source $CONDA_PREFIX/setup.bash
 source <path-to-workspace>/agar_build/install/setup.sh
 ```
 

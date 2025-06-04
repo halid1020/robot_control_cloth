@@ -30,6 +30,8 @@ from skimage.measure import label, regionprops
 
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
+MASK_THRESHOLD_V2=350000
+
 def extract_square_crop_mask(mask):
     coords = np.argwhere(mask)
     y_center, x_center = coords.mean(axis=0).astype(int)

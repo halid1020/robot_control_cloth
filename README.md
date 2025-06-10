@@ -87,7 +87,7 @@ ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e execut
 2. Test active gripper
 ```
 source /opt/ros/humble/setup.bash
-source <path-to-workspace>rcc_build/install/setup.sh
+source ./rcc_build/install/setup.sh
 
 ros2 run rcc_qs_pnp active_gripper_control.py
 ```
@@ -129,7 +129,11 @@ source install/setup.sh
 ```
 cd <path-to-agent-arena>
 . ./setup.sh
-source <path-to-workspace>/agar_build/install/setup.sh
+```
+
+Go to the workspace
+```
+source ./agar_build/install/setup.sh
 ```
 
 a. human_interace

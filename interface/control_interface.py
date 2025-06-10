@@ -12,12 +12,15 @@ from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
 from cv_bridge import CvBridge
 
+
 from .utils import *
 
 class ControlInterface(Node):
     def __init__(self, task, steps=20, name='control_interface',
                  adjust_pick=False, adjust_orien=False, 
                  video_device='/dev/video6', debug=False,
+                 success_check_fn=(lambda state: False), 
+                 human_success_judgement=True,
                  save_dir='.'):
         super().__init__(f"{name}_interface")
         self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
@@ -29,6 +32,8 @@ class ControlInterface(Node):
         self.task = task
         self.save_dir = save_dir
         self.debug = debug
+        self.human_success_judgement = human_success_judgement
+        self.success_check_fn = success_check_fn
         os.makedirs(self.save_dir, exist_ok=True)
       
         self.step = -1
@@ -218,10 +223,12 @@ class ControlInterface(Node):
                 'normalised_improvement': max(min(1.0*(cur_mask_pixels - self.init_mask_pixels)\
                                                 /(self.max_mask_pixels - self.init_mask_pixels), 1), 0),
                 'max_IoU': max_IoU,
-                'auto success': bool(1.0 * cur_mask_pixels/self.max_mask_pixels > 0.95),
+                
                 'human success': False
             }
 
+            res['auto success'] = bool(self.success_check_fn(res)) #bool(1.0 * cur_mask_pixels/self.max_mask_pixels
+            
             return res
         elif 'folding' in self.task:
             IoU, matched_mask = get_IoU(state['observation']['mask'], self.goal_mask)
@@ -229,7 +236,7 @@ class ControlInterface(Node):
                 save_mask(matched_mask, filename='matched_mask', directory='tmp')
             return {
                 'human success': False, 
-                'auto success': bool(IoU > 0.9),
+                'auto success': self.success_check_fn(state), #bool(IoU > 0.9),
                 'IoU': IoU}
     
     def setup_evaluation(self, state):
@@ -283,17 +290,18 @@ class ControlInterface(Node):
     def end_trial(self, state):
         self.stop_video()
 
-        while True:
-            is_success = input('[User Attention!] Is the task successful? (y/n): ')
-            if is_success == 'y':
-                state['evaluation']['human success'] = True
-                break
-            elif is_success == 'n':
-                state['evaluation']['human success'] = False
-                break
-            else:
-                print('[User Attention!] Invalid input')
-                continue
+        if self.human_success_judgement:
+            while True:
+                is_success = input('[User Attention!] Is the task successful? (y/n): ')
+                if is_success == 'y':
+                    state['evaluation']['human success'] = True
+                    break
+                elif is_success == 'n':
+                    state['evaluation']['human success'] = False
+                    break
+                else:
+                    print('[User Attention!] Invalid input')
+                    continue
         self.save_step(state)
         self.reset()
 
@@ -325,7 +333,7 @@ class ControlInterface(Node):
 
         input_state['evaluation'] = evaluation
 
-        done = (self.step >= self.fix_steps)
+        done = (self.step >= self.fix_steps) or self.success_check_fn(input_state['evaluation'])
 
         
         if wait_for_user_input():
@@ -355,7 +363,7 @@ class ControlInterface(Node):
             save_state['observation']['rgb'],
             tuple(pixel_actions[:2]),
             tuple(pixel_actions[2:]),
-            color=(0, 136, 0),
+            color=(137,243,54),
             swap=True,
         ).get().astype(np.uint8)
         action['pick-and-place'] = action['pick-and-place'].reshape(4).tolist()

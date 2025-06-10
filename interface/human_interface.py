@@ -47,7 +47,9 @@ class HumanPickAndPlace(ControlInterface):
         #     print('workspace', workspace.shape)
         #     alpha = 0.5
         alpha = 0.5
-        rgb = alpha * (1.0*rgb/255) + (1-alpha) * workspace
+        #rgb = alpha * (1.0*rgb/255) + (1-alpha) * workspace
+        rgb_ = 1.0*rgb/255
+        rgb = workspace * rgb_ + (1-workspace)*alpha*rgb_
         rgb = (rgb * 255).astype(np.uint8)
             
         img = rgb.copy()

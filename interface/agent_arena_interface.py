@@ -27,47 +27,26 @@ from .control_interface import ControlInterface
 
 
 class AgentArenaInterface(ControlInterface):
-    def __init__(self, agent, task, config_name, 
+    def __init__(self, agent, config_name, 
                  checkpoint,
-                 steps=20, 
-                 adjust_pick=False, 
-                 adjust_orien=False,
                  depth_sim2real='v2',
                  mask_sim2real='v2',
                  sim_camera_height=0.65,
                  callback_on_internal_states=None,
                  whole_workspace=False,
                  goal_conditioned=False,
-                 save_dir='.'):
-        super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
-                         name='agent', adjust_orien=adjust_orien, save_dir=save_dir)
+                 **kwargs):
+        super().__init__(**kwargs)
         self.goal_conditioned = goal_conditioned    
         self.agent = agent
         self.internal_states = []
         self.callback_on_internal_states = callback_on_internal_states
         self.whole_workspace = whole_workspace
-        # print('Max steps {}'.format(steps))
-        #  ### Initialise Ros
-        # self.img_sub = self.create_subscription(Observation, '/observation', self.img_callback, 10)
-        # self.pnp_pub = self.create_publisher(NormPixelPnP, '/norm_pixel_pnp', 10)
-        # self.reset_pub = self.create_publisher(Header, '/reset', 10)
-
-        #self.task = task
-        # self.resolution = (256, 256)
-        # self.fix_steps = steps
-
-        # self.mask_generator = get_mask_generator()
-        
        
         self.save_dir = '{}/agent_data/{}-{}-{}-{}'.\
-            format(self.save_dir, task, agent.name, config_name, checkpoint)
+            format(self.save_dir, self.task, agent.name, config_name, checkpoint)
 
         os.makedirs(self.save_dir, exist_ok=True)
-        # self.step = -1
-        # self.last_action = None
-        # self.trj_name = ''
-        # self.adjust_pick = adjust_pick
-        # self.adjust_orient = adjust_orien
 
         self.depth_sim2real = depth_sim2real
         self.mask_sim2real = mask_sim2real
@@ -121,36 +100,7 @@ class AgentArenaInterface(ControlInterface):
             adjust_pick, errod_mask = adjust_points([pick_pixel], mask.copy(), 5)
             pick_pixel = adjust_pick[0]
 
-        # if self.adjust_orient:
-        #     if self.adjust_pick:
-        #         feed_mask = errod_mask
-        #     else:
-        #         feed_mask = mask
-
-            
-        
-        
-        #     orientation = get_orientation(pick_pixel, feed_mask.copy())
-        #     ## combine mask and feed_mask, make mask gray and feed_mask as white
-        #     ## draw the org_pick and pick_pixel on the image, org_pick in light_green and pick_pixel in green
-        #     # draw the orientation line on the image with red
-        #     ## save the image in the self.agent.state
-
-        #     mask = mask * 0.5
-        #     feed_mask = feed_mask * 0.5 + 0.5
-        #     grasp_image = mask + feed_mask
-        #     grasp_image = (mask * 255).astype(np.uint8)
-        #     grasp_image = cv2.cvtColor(grasp_image, cv2.COLOR_GRAY2RGB)
-            
-        #     grasp_image = cv2.circle(grasp_image, tuple(org_pick[::-1]), 5, [144, 238, 144], -1)
-        #     grasp_image = cv2.circle(grasp_image, tuple(pick_pixel[::-1]), 5, [0, 128, 0], -1)
-
-        #     orientation = orientation * np.pi/180
-        #     end_point = (int(pick_pixel[0] + 20*np.cos(orientation)), int(pick_pixel[1] + 20*np.sin(orientation)))
-        #     grasp_image = cv2.line(grasp_image, tuple(pick_pixel[::-1]), end_point[::-1], [0, 0, 255], 2)
-
-        #     self.agent.state['grasp_image'] = grasp_image
-        print('adjust orient', self.adjust_orient)
+        #print('adjust orient', self.adjust_orient)
         if self.adjust_orient:
             # Determine which mask to use based on adjust_pick
             feed_mask = errod_mask if self.adjust_pick else mask
@@ -171,9 +121,6 @@ class AgentArenaInterface(ControlInterface):
             draw_pick_pixel = (np.asarray(pick_pixel) * 2).astype(np.int32)
             org_pick = (org_pick * 2).astype(np.int32)
 
-            # Draw original pick point (light green) and adjusted pick point (dark green)
-            # swap x and y coordinates for cv2.circle
-            #pick_pixel = (pick_pixel + 1) / 2 * H
            
 
             # Draw orientation line (red)
@@ -232,23 +179,6 @@ class AgentArenaInterface(ControlInterface):
             mask = get_mask_v2(self.mask_generator, rgb, mask_treshold=MASK_THRESHOLD_V2)
 
         rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
-
-        ### Alert !!! map the depth from 0 (shallowest) to 1 (deepest)
-        ### background are 1s.
-        ### the agent needs to do the adjustment according! 
-        
-        # if self.depth_sim2real in ['v1', 'v2']:
-        #     if len(mask.shape) == 2:
-        #         mask_ = np.expand_dims(mask, -1)
-
-        #     if np.max(depth) == np.min(depth):
-        #         depth = np.zeros_like(depth)
-        #     else:
-        #         depth = (depth - np.min(depth))/(np.max(depth) - np.min(depth))
-            
-        #     masked_depth = depth * mask_
-        #     new_depth = np.ones_like(masked_depth)
-        #     depth = new_depth * (1 - mask_) + masked_depth
 
         if self.depth_sim2real in ['v1', 'v2']:
             if len(mask.shape) == 2:
@@ -405,8 +335,9 @@ if __name__ == "__main__":
         
         ### Run Sim2Real ###
         sim2real = AgentArenaInterface(
-            agent, args.task, args.config, 
-            checkpoint, max_steps, 
+            agent, args.config, 
+            checkpoint, max_steps,
+            task=args.task, 
             adjust_orien=args.adjust_orien, 
             adjust_pick=args.adjust_pick, 
             save_dir=args.save_dir,

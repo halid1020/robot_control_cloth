@@ -52,7 +52,7 @@ class AgentArenaInterface(ControlInterface):
         self.mask_sim2real = mask_sim2real
         self.sim_camera_height = sim_camera_height
 
-        print('Finish Init Agent')
+        print('Finish Initialising Agent')
 
     def save_step(self, state):
         super().save_step(state)
@@ -89,7 +89,8 @@ class AgentArenaInterface(ControlInterface):
         height, width = mask.shape[:2]
         action = self.agent.act([state])[0]
         self.internal_states.append(self.agent.get_state()[0])
-        print('inter states keys', self.agent.get_state()[0].keys())
+        if self.debug:
+            print('inter states keys', self.agent.get_state()[0].keys())
         if 'norm-pixel-pick-and-place' in action:
             action = action['norm-pixel-pick-and-place']
         pnp = np.concatenate([action['pick_0'][::-1], action['place_0'][::-1]]).reshape(4)
@@ -149,7 +150,8 @@ class AgentArenaInterface(ControlInterface):
             'orientation': orientation
         }
 
-        print('action', action)
+        if self.debug:
+            print('action', action)
 
         return action
     
@@ -166,7 +168,8 @@ class AgentArenaInterface(ControlInterface):
     def update(self, state, action):
         state['arena_id'] = 0
         self.agent.update([state], [np.asarray(action['pick-and-place'])])
-        print('update states', self.agent.get_state()[0].keys())
+        if self.debug:
+            print('update states', self.agent.get_state()[0].keys())
       
 
     def get_state(self):

@@ -290,10 +290,10 @@ def get_mask_v2(mask_generator, rgb, mask_treshold=160000):
         avg_masked_color = np.mean(masked_pixels, axis=0)
         background_pixels = background_region[final_mask == 0]
         avg_background_color = np.mean(background_pixels, axis=0)
-        print(f'avg_masked_color {avg_masked_color} avg_background_color {avg_background_color}')
+        #print(f'avg_masked_color {avg_masked_color} avg_background_color {avg_background_color}')
         
         #save_mask(final_mask, 'final_mask')
-        print('Final mask generated.')
+        #print('Final mask generated.')
 
         return final_mask
 
@@ -303,7 +303,7 @@ def get_mask_v1(mask_generator, rgb):
         
     final_mask = None
     max_color_difference = 0
-    print('Processing mask results...')
+    #print('Processing mask results...')
     save_color(rgb, 'rgb', './tmp')
     mask_data = []
 
@@ -631,7 +631,7 @@ def imgmsg_to_cv2_custom(img_msg, encoding="bgr8"):
     return image
 
 def save_color(img, filename='color', directory="."):
-    print('save color img' , img.shape)
+    #print('save color img' , img.shape)
     img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     cv2.imwrite('{}/{}.png'.format(directory, filename), img_bgr)
 
@@ -662,8 +662,7 @@ def save_depth_distribution(depth_image, filename='depth_distribution', director
     # Compute histogram with 100 bins
     depth_image = depth_image.flatten()
     hist, bins = np.histogram(depth_image, bins=100)
-    print('hist', hist)
-    print('bins', bins)
+
     
     # Compute bin centers for better alignment in the bar plot
     bin_centers = (bins[:-1] + bins[1:]) / 2

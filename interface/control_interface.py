@@ -48,7 +48,7 @@ class ControlInterface(Node):
             self.demo_states = []
         #self.estimate_pick_depth = estimate_pick_dpeth
 
-        print('Finish Init Control Interface')
+        print('Finish Initialising Control Interface')
 
     def publish_action(self, pnp):
         data = pnp['pick-and-place'] #.reshape(4)
@@ -68,7 +68,8 @@ class ControlInterface(Node):
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
         self.reset_pub.publish(header)
-        print('Published reset!')
+        if self.debug:
+            print('Published reset!')
 
     def _save_step(self, state, save_dir):
         rgb = state['observation']['rgb']
@@ -116,25 +117,29 @@ class ControlInterface(Node):
             rgb = (rgb * 255).astype(np.uint8)
             save_color(rgb, filename='workspace_rgb', directory=save_dir)
 
-        print('state', state.keys())
+        if self.debug:
+            print('state', state.keys())
 
         if 'input_obs' in state:
             input_obs = state['input_obs']
             input_type = state['input_type']
-            print('input_obs', input_obs.shape)
+            if self.debug:
+                print('input_obs', input_obs.shape)
             if input_type == 'rgb':
                 input_obs = (input_obs * 255).clip(0, 255).astype(np.uint8)
                 save_color(input_obs, filename='input_obs_rgb', directory=save_dir)
             elif input_type == 'depth':
-                print('max depth', np.max(input_obs))
-                print('min depth', np.min(input_obs))
+                if self.debug:
+                    print('max depth', np.max(input_obs))
+                    print('min depth', np.min(input_obs))
                 ## save a plot for the distribution of the depth
                 save_depth_distribution(input_obs, filename='input_obs_depth_distribution', directory=save_dir)
 
                 save_depth(input_obs, filename='input_obs_depth', directory=save_dir, remap=False)
                 save_depth(input_obs, filename='input_obs_colour_depth', directory=save_dir, colour=True, remap=False)
             elif input_type == 'rgbd':
-                print('input_obs', input_obs.shape)
+                if self.debug:
+                    print('input_obs', input_obs.shape)
                 rgb = input_obs[:, :, :3].copy().clip(0, 255).astype(np.uint8)
                 save_color(rgb, filename='input_obs_rgb', directory=save_dir)
                 save_depth(input_obs[:, :, 3], filename='input_obs_depth', directory=save_dir)
@@ -169,7 +174,8 @@ class ControlInterface(Node):
         if 'action' in state:
             action = state['action']
             action_image = state['action_image']
-            print('action image', action_image.shape)
+            if self.debug:
+                print('action image', action_image.shape)
             save_color(action_image, filename='action_image', directory=save_dir)
             # cv2.imwrite(f'{save_dir}/action_image.png', action_image)
             with open(f'{save_dir}/action.json', "w") as json_file:
@@ -202,7 +208,8 @@ class ControlInterface(Node):
         if self.task == 'flattening':
             current_mask = state['observation']['full_mask']
             cur_mask_pixels = int(np.sum(current_mask))
-            print('current_mask', cur_mask_pixels)
+            if self.debug:
+                print('current_mask', cur_mask_pixels)
 
             if self.step == 0:
                 self.init_mask_pixels = cur_mask_pixels
@@ -306,7 +313,8 @@ class ControlInterface(Node):
         self.reset()
 
     def img_callback(self, data):
-        print('Receive observation data')
+        if self.debug:
+            print('Receive observation data')
         crop_rgb = imgmsg_to_cv2_custom(data.crop_rgb, "bgr8")
         crop_depth = imgmsg_to_cv2_custom(data.crop_depth, "64FC1")
         raw_rgb = imgmsg_to_cv2_custom(data.raw_rgb, "bgr8")

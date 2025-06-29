@@ -27,8 +27,9 @@ from .control_interface import ControlInterface
 
 
 class AgentArenaInterface(ControlInterface):
-    def __init__(self, agent, config_name, 
-                 checkpoint,
+    def __init__(self, agent, 
+                 #config_name, 
+                 #checkpoint,
                  depth_sim2real='v2',
                  mask_sim2real='v2',
                  sim_camera_height=0.65,
@@ -43,10 +44,10 @@ class AgentArenaInterface(ControlInterface):
         self.callback_on_internal_states = callback_on_internal_states
         self.whole_workspace = whole_workspace
        
-        self.save_dir = '{}/agent_data/{}-{}-{}-{}'.\
-            format(self.save_dir, self.task, agent.name, config_name, checkpoint)
+        # self.save_dir = '{}/agent_data/{}-{}-{}-{}'.\
+        #     format(self.save_dir, self.task, agent.name, config_name, checkpoint)
 
-        os.makedirs(self.save_dir, exist_ok=True)
+        #os.makedirs(self.save_dir, exist_ok=True)
 
         self.depth_sim2real = depth_sim2real
         self.mask_sim2real = mask_sim2real

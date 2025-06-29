@@ -211,7 +211,7 @@ def get_mask_v2(mask_generator, rgb, mask_treshold=160000):
         
         final_mask = None
         max_color_difference = 0
-        print('Processing mask results...')
+        #print('Processing mask results...')
         save_color(rgb, 'rgb', './tmp')
         mask_data = []
 

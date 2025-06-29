@@ -44,13 +44,13 @@ work_r: 0.24
 robot_gripper: "active_parallel_gripper"
 
 # CAUTION!!! following value needs to be calibrated
-g2e_offset: 0.202 #0.168
+g2e_offset: 0.158 #0.168 #0.202 #0.168
 
 ###################
 ## Camera Config ##
 ###################
 
-camera_pose: [-0.385, 0.028, 0.738000]
+camera_pose: [-0.375, 0.042, 0.738000] # -0.385, 0.028
 camera_orien: [180.0, 0.000000, 89.500000] # Euler system in degree.
 # CAUTION!!! following values need to be calibrations using hand-eye-calibration
 # camera_setup: "eye-on-hand"

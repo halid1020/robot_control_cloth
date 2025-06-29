@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 import cv2
+import argparse
 
 from rcc_msgs.msg import NormPixelPnP, Observation, Reset, WorldPnP
 from std_msgs.msg import Header
@@ -19,14 +20,14 @@ from control_interface import ControlInterface
 class HumanPickAndPlace(ControlInterface):
     def __init__(self, task, steps=20,
                  adjust_pick=False, adjust_orien=False,
-                 whole_workspace=False):
+                 whole_workspace=False, debug=False, save_dir='/data/human_data'):
         
         super().__init__(task, steps=steps, adjust_pick=adjust_pick, 
-                         name='human', adjust_orien=adjust_orien)
-        self.save_dir = f'/data/human_data/{task}'
+                         name='human', adjust_orien=adjust_orien, debug=debug, save_dir=save_dir)
+        self.save_dir = f'{save_dir}/{task}'
         self.whole_workspace = whole_workspace
         #self.mask_sim2real = mask_sim2real
-        os.makedirs(self.save_dir, exist_ok=True)
+        
 
         self.width_offset = 150
         self.height_offset = 100
@@ -46,7 +47,9 @@ class HumanPickAndPlace(ControlInterface):
         #     print('workspace', workspace.shape)
         #     alpha = 0.5
         alpha = 0.5
-        rgb = alpha * (1.0*rgb/255) + (1-alpha) * workspace
+        #rgb = alpha * (1.0*rgb/255) + (1-alpha) * workspace
+        rgb_ = 1.0*rgb/255
+        rgb = workspace * rgb_ + (1-workspace)*alpha*rgb_
         rgb = (rgb * 255).astype(np.uint8)
             
         img = rgb.copy()
@@ -71,7 +74,7 @@ class HumanPickAndPlace(ControlInterface):
 
         if self.adjust_pick:
             
-            adjust_pick, errod_mask = adjust_points([clicks[0]], mask.copy())
+            adjust_pick, errod_mask = adjust_points([clicks[0]], mask.copy(), 5)
             clicks[0] = adjust_pick[0]
 
         orientation = 0.0  
@@ -105,9 +108,9 @@ class HumanPickAndPlace(ControlInterface):
         # rgb = cv2.resize(rgb, self.resolution)
         # depth = cv2.resize(depth, self.resolution)
 
-        mask_v2 = get_mask_v2(self.mask_generator, org_rgb)
-        mask_v1 = get_mask_v1(self.mask_generator, org_rgb)
-        mask_v0 = get_mask_v0(org_rgb) 
+        mask_v2 = get_mask_v2(self.mask_generator, org_rgb, mask_treshold=MASK_THRESHOLD_V2)
+        # mask_v1 = get_mask_v1(self.mask_generator, org_rgb)
+        # mask_v0 = get_mask_v0(org_rgb) 
         
         #rgb =  cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
         org_rgb =  cv2.cvtColor(org_rgb, cv2.COLOR_BGR2RGB)
@@ -122,42 +125,66 @@ class HumanPickAndPlace(ControlInterface):
                 'rgb': rgb.copy(),
                 'depth': norm_depth.copy(),
                 'mask': mask_v2.copy(),
-                'mask_v1': mask_v1.copy(),
-                'mask_v0': mask_v0.copy(),
+                # 'mask_v1': mask_v1.copy(),
+                # 'mask_v0': mask_v0.copy(),
                 'mask_v2': mask_v2.copy(),
                 'workspace': workspace.copy()
             }
         }
         
         if raw_rgb is not None:
-            
-            raw_rgb = raw_rgb[self.height_offset:-self.height_offset, self.width_offset:-self.width_offset]
-            #workspace = workspace[self.height_offset:-self.height_offset, self.width_offset:-self.width_offset]
-            full_mask = get_mask_v2(self.mask_generator, raw_rgb)[self.mask_offset:-self.mask_offset, self.mask_offset:-self.mask_offset]
+            raw_rgb = raw_rgb[100:-100, 150:-150]
+            if self.whole_workspace:
+                full_mask = mask_v2[10:-10, 10:-10]
+            else:
+                full_mask = get_mask_v2(self.mask_generator, raw_rgb, mask_treshold=MASK_THRESHOLD_V2)[10:-10, 10:-10]
             state['observation']['full_mask'] = full_mask
-            raw_rgb =  cv2.cvtColor(
-                raw_rgb[self.mask_offset:-self.mask_offset, self.mask_offset:-self.mask_offset], 
-                cv2.COLOR_BGR2RGB)
+            raw_rgb =  cv2.cvtColor(raw_rgb[10:-10, 10:-10], cv2.COLOR_BGR2RGB)
             state['observation']['raw_rgb'] = raw_rgb
-            #state['observation']['workspace'] = workspace[self.mask_offset:-self.mask_offset, self.mask_offset:-self.mask_offset]
 
-            # print('save_dir', self.save_dir)    
-            # save_color(raw_rgb, 'raw_rgb_human', self.save_dir)
-            # save_mask(workspace, 'worspace_mask_human', self.save_dir)
 
         return state
 
+def parse_arguments():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--task', default='flattening')
+    parser.add_argument('--domain', default='sim2real-rect-fabric')
+
+    parser.add_argument('--save_dir', default='/data/human_data')
+    #parser.add_argument('--store_interm', action='store_true', help='store intermediate results')
+    parser.add_argument('--eval_checkpoint', default=-1, type=int)
+
+    ## Sim2Real Protocol
+    parser.add_argument('--depth_sim2real', default='v2')
+    parser.add_argument('--mask_sim2real', default='v2')
+    parser.add_argument('--sim_camera_height', default=0.65, type=float)
+
+    ## Grasping Protocol
+    parser.add_argument('--disable_adj_pick', action='store_true')
+    parser.add_argument('--disable_adj_orient', action='store_true')
+
+    # Debug
+    parser.add_argument('--debug', action='store_true')
+
+
+
+
+    return parser.parse_args()
+
 def main():
+    args = parse_arguments()
     rclpy.init()
     task = 'flattening'  # Default task, replace with argument parsing if needed
     max_steps = 20  # Default max steps, replace with task-specific logic if needed
-    adjust_pick=False
-    adjust_orien=False
+    adjust_pick= not args.disable_adj_pick
+    adjust_orien= not args.disable_adj_orient
     whole_workspace=True
     sim2real = HumanPickAndPlace(task, max_steps,
-                                 adjust_pick, adjust_orien,
-                                whole_workspace=whole_workspace
-                                 )
+                                adjust_pick, adjust_orien,
+                                whole_workspace=whole_workspace,
+                                save_dir=args.save_dir,
+                                debug=args.debug)
     sim2real.run()
     rclpy.shutdown()
 

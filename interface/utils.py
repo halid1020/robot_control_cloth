@@ -30,6 +30,118 @@ from skimage.measure import label, regionprops
 
 MyPos = namedtuple('Pos', ['pose', 'orien'])
 
+MASK_THRESHOLD_V2=350000
+
+def extract_square_crop_mask(mask):
+    coords = np.argwhere(mask)
+    y_center, x_center = coords.mean(axis=0).astype(int)
+    side_length = min(mask.shape)
+    x_start = max(x_center - side_length // 2, 0)
+    y_start = max(y_center - side_length // 2, 0)
+    x_start = min(x_start, mask.shape[1] - side_length)
+    y_start = min(y_start, mask.shape[0] - side_length)
+    return mask[y_start: y_start + side_length, x_start: x_start + side_length]
+    #return (y_start, , x_start, x_start + side_length)
+
+def calculate_iou(mask1, mask2):
+    if mask1.shape[0] > 128:
+        mask1 = cv2.resize(mask1.astype(np.float32), (128, 128), interpolation=cv2.INTER_AREA)
+        mask1 = (mask1 > 0.5).astype(bool)
+        
+
+    if mask2.shape[0] > 128:
+        mask2 = cv2.resize(mask2.astype(np.float32), (128, 128), interpolation=cv2.INTER_AREA)
+        mask2 = (mask2 > 0.5).astype(bool)
+
+    intersection = np.logical_and(mask1, mask2).sum()
+    union = np.logical_or(mask1, mask2).sum()
+    return intersection / union if union > 0 else 0
+
+def get_max_IoU(mask1, mask2):
+    """
+    Calculate the maximum IoU between two binary mask images,
+    allowing for rotation and translation of mask1.
+    
+    :param mask1: First binary mask (numpy array)
+    :param mask2: Second binary mask (numpy array)
+    :return: Tuple of (Maximum IoU value, Matched mask)
+    """
+
+    ## if mask is rectangular, make it square by padding
+    if mask1.shape[0] > mask1.shape[1]:
+        pad = (mask1.shape[0] - mask1.shape[1]) // 2
+        mask1 = np.pad(mask1, ((0, 0), (pad, pad)), mode='constant')
+    elif mask1.shape[1] > mask1.shape[0]:
+        pad = (mask1.shape[1] - mask1.shape[0]) // 2
+        mask1 = np.pad(mask1, ((pad, pad), (0, 0)), mode='constant')
+    
+    if mask2.shape[0] > mask2.shape[1]:
+        pad = (mask2.shape[0] - mask2.shape[1]) // 2
+        mask2 = np.pad(mask2, ((0, 0), (pad, pad)), mode='constant')
+    elif mask2.shape[1] > mask2.shape[0]:
+        pad = (mask2.shape[1] - mask2.shape[0]) // 2
+        mask2 = np.pad(mask2, ((pad, pad), (0, 0)), mode='constant')
+    
+    # print('mask1 shape:', mask1.shape)
+    # print('mask2 shape:', mask2.shape)
+
+    # if resolution above 128, we need to resize the mask to 128
+    if mask1.shape[0] > 128:
+        mask1 = cv2.resize(mask1.astype(np.float32), (128, 128), interpolation=cv2.INTER_AREA)
+        mask1 = (mask1 > 0.5).astype(np.uint8)
+        
+
+    if mask2.shape[0] > 128:
+        mask2 = cv2.resize(mask2.astype(np.float32), (128, 128), interpolation=cv2.INTER_AREA)
+        mask2 = (mask2 > 0.5).astype(np.uint8)
+    
+    
+
+    # Get the properties of mask2
+    props = regionprops(label(mask2))[0]
+    center_y, center_x = props.centroid
+
+    max_iou = 0
+    best_mask = None
+    
+    # Define rotation angles to try
+    angles = range(0, 360, 1)  # Rotate from 0 to 350 degrees in 10-degree steps
+    
+    for angle in angles:
+        # Rotate mask1
+        rotated_mask = rotate(mask1, angle, reshape=False)
+
+        # if the mask is blank, skip
+        if np.sum(rotated_mask) == 0:
+            continue
+        
+        # Get properties of rotated mask
+        rotated_props = regionprops(label(rotated_mask))[0]
+        rotated_center_y, rotated_center_x = rotated_props.centroid
+        
+        # Calculate translation
+        dy = center_y - rotated_center_y
+        dx = center_x - rotated_center_x
+        
+        # Translate rotated mask
+        translated_mask = shift(rotated_mask, (dy, dx))
+        
+        #translated_mask = (translated_mask > 0.1).astype(int)
+        # Calculate IoU
+        iou = calculate_iou(translated_mask, mask2)
+        
+        # Update max_iou and best_mask if necessary
+        if iou > max_iou:
+            max_iou = iou
+            best_mask = translated_mask
+
+    # Ensure the best_mask is binary
+    if best_mask is None:
+        return 0, None
+    
+    best_mask = (best_mask > 0.5).astype(int)
+
+    return max_iou, best_mask
 
 def get_IoU(mask1, mask2):
     """
@@ -84,7 +196,7 @@ def get_IoU(mask1, mask2):
 
     return max_iou, best_mask
 
-def get_mask_v2(mask_generator, rgb):
+def get_mask_v2(mask_generator, rgb, mask_treshold=160000):
         """
         Generate a mask for the given RGB image that is most different from the background.
         
@@ -99,7 +211,7 @@ def get_mask_v2(mask_generator, rgb):
         
         final_mask = None
         max_color_difference = 0
-        print('Processing mask results...')
+        #print('Processing mask results...')
         save_color(rgb, 'rgb', './tmp')
         mask_data = []
 
@@ -150,7 +262,7 @@ def get_mask_v2(mask_generator, rgb):
                 orginal_mask = 1 - orginal_mask
             
             mask_region_size = np.sum(orginal_mask == 1)
-            if mask_region_size > 160000:
+            if mask_region_size > mask_treshold:
                 continue
 
             mask_data.append({
@@ -178,10 +290,10 @@ def get_mask_v2(mask_generator, rgb):
         avg_masked_color = np.mean(masked_pixels, axis=0)
         background_pixels = background_region[final_mask == 0]
         avg_background_color = np.mean(background_pixels, axis=0)
-        print(f'avg_masked_color {avg_masked_color} avg_background_color {avg_background_color}')
+        #print(f'avg_masked_color {avg_masked_color} avg_background_color {avg_background_color}')
         
         #save_mask(final_mask, 'final_mask')
-        print('Final mask generated.')
+        #print('Final mask generated.')
 
         return final_mask
 
@@ -191,7 +303,7 @@ def get_mask_v1(mask_generator, rgb):
         
     final_mask = None
     max_color_difference = 0
-    print('Processing mask results...')
+    #print('Processing mask results...')
     save_color(rgb, 'rgb', './tmp')
     mask_data = []
 
@@ -519,7 +631,7 @@ def imgmsg_to_cv2_custom(img_msg, encoding="bgr8"):
     return image
 
 def save_color(img, filename='color', directory="."):
-    print('save color img' , img.shape)
+    #print('save color img' , img.shape)
     img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     cv2.imwrite('{}/{}.png'.format(directory, filename), img_bgr)
 
@@ -550,8 +662,7 @@ def save_depth_distribution(depth_image, filename='depth_distribution', director
     # Compute histogram with 100 bins
     depth_image = depth_image.flatten()
     hist, bins = np.histogram(depth_image, bins=100)
-    print('hist', hist)
-    print('bins', bins)
+
     
     # Compute bin centers for better alignment in the bar plot
     bin_centers = (bins[:-1] + bins[1:]) / 2

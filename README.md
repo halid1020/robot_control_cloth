@@ -57,6 +57,8 @@ source /opt/ros/humble/setup.sh
 ros2 launch ur_robot_driver ur_control.launch.py ur_type:=ur3e robot_ip:=192.168.1.15 launch_rviz:=false
 ```
 
+The above needs to be run first, otherwise the pedant will complain about the connection.
+
 2. Run the `URCaps` program in pedant, and set to `remote control`.
 
 3. Right under `<ws_name>`
@@ -85,7 +87,7 @@ ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e execut
 2. Test active gripper
 ```
 source /opt/ros/humble/setup.bash
-source <path-to-workspace>rcc_build/install/setup.sh
+source ./rcc_build/install/setup.sh
 
 ros2 run rcc_qs_pnp active_gripper_control.py
 ```
@@ -98,12 +100,20 @@ source ./rcc_build/install/setup.sh
 ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:=test_whole_system.py
 ```
 
+5. Hand-Eye calibration
+
+```
+source /opt/ros/humble/setup.bash
+source ./rcc_build/install/setup.sh
+
+ros2 launch rcc_qs_pnp ur_robot_moveit_executable_launch.py ur_type:=ur3e executable:=hand_eye_calibrator.py
+```
+
 ## V. Build and Run integration with `agent-arena`
 1. Build
 ```
 cd <path-to-agent-arena>
 . ./setup.sh
-source $CONDA_PREFIX/setup.bash
 ```
 
 ```
@@ -119,8 +129,11 @@ source install/setup.sh
 ```
 cd <path-to-agent-arena>
 . ./setup.sh
-source $CONDA_PREFIX/setup.bash
-source <path-to-workspace>/agar_build/install/setup.sh
+```
+
+Go to the workspace
+```
+source ./agar_build/install/setup.sh
 ```
 
 a. human_interace
